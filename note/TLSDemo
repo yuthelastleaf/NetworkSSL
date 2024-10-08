@@ -1,0 +1,36 @@
+# TLSDemo
+
+## 项目编译
+
+使用的编译器是visual studio 2019,其中openssl是通过vcpkg获取的。
+
+### vcpkg使用方法
+
+首先先通过git下载vcpkg
+```shell 
+git@github.com:microsoft/vcpkg.git
+```
+
+然后打开vcpkg目录，运行bootstrap-vcpkg.bat
+
+```shell
+.\bootstrap-vcpkg.bat
+```
+
+这样vcpkg就安装好了，然后就可以使用vcpkg安装openssl了。
+
+```shell
+.\vcpkg.exe install openssl
+```
+
+不过注意要在visual studio中可以使用vcpkg的话，还需要运行一个命令集成到编译工具中
+
+```shell
+.\vcpkg integrate install
+```
+
+## TLS 客户端
+
+## TLS 服务器
+
+
