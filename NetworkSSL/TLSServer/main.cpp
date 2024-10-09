@@ -8,8 +8,19 @@
 #pragma comment(lib, "ws2_32.lib")
 #pragma comment(lib, "Crypt32.lib")
 
+int main(int argc, char* argv[]) {
+    // 检查命令行参数是否传入了端口号
+    if (argc < 2) {
+        std::cerr << "Usage: " << argv[0] << " <port>" << std::endl;
+        return -1;
+    }
 
-int main() {
+    int port = atoi(argv[1]);
+    if (port <= 0 || port > 65535) {
+        std::cerr << "Invalid port number." << std::endl;
+        return -1;
+    }
+
     // 初始化 Windows 套接字库
     WSADATA wsaData;
     if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
@@ -61,7 +72,7 @@ int main() {
     memset(&server, 0, sizeof(server));
     server.sin_family = AF_INET;
     server.sin_addr.s_addr = htonl(INADDR_ANY);
-    server.sin_port = htons(8888);
+    server.sin_port = htons(port);
 
     if (bind(sockfd, (struct sockaddr*)&server, sizeof(server)) == SOCKET_ERROR) {
         std::cerr << "Binding failed" << std::endl;

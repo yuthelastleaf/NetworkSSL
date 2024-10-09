@@ -8,15 +8,28 @@
 #pragma comment(lib, "ws2_32.lib")
 #pragma comment(lib, "Crypt32.lib")
 
-int main() {
-    // ³õÊ¼»¯ Winsock ¿â
+int main(int argc, char* argv[]) {
+    // æ£€æŸ¥å‘½ä»¤è¡Œå‚æ•°æ˜¯å¦ä¼ å…¥äº†æœåŠ¡å™¨åœ°å€å’Œç«¯å£
+    if (argc < 3) {
+        std::cerr << "Usage: " << argv[0] << " <server_address> <port>" << std::endl;
+        return -1;
+    }
+
+    const char* server_addr = argv[1];
+    int server_port = atoi(argv[2]);
+    if (server_port <= 0 || server_port > 65535) {
+        std::cerr << "Invalid port number." << std::endl;
+        return -1;
+    }
+
+    // åˆå§‹åŒ– Winsock åº“
     WSADATA wsaData;
     if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
         std::cerr << "WSAStartup failed" << std::endl;
         return -1;
     }
 
-    // ³õÊ¼»¯ OpenSSL ¿â
+    // åˆå§‹åŒ– OpenSSL åº“
     SSL_library_init();
     SSL_load_error_strings();
     OpenSSL_add_all_algorithms();
@@ -29,10 +42,10 @@ int main() {
         return -1;
     }
 
-    // ´´½¨ SSL ¶ÔÏó
+    // åˆ›å»º SSL å¯¹è±¡
     SSL* ssl = SSL_new(ctx);
 
-    // ´´½¨ socket ²¢Óë·şÎñÆ÷½¨Á¢Á¬½Ó
+    // åˆ›å»º socket å¹¶ä¸æœåŠ¡å™¨å»ºç«‹è¿æ¥
     SOCKET sockfd = socket(AF_INET, SOCK_STREAM, 0);
     if (sockfd == INVALID_SOCKET) {
         std::cerr << "Failed to create socket" << std::endl;
@@ -41,12 +54,9 @@ int main() {
         return -1;
     }
 
-    // ÉèÖÃ·şÎñÆ÷µØÖ·ºÍ¶Ë¿ÚºÅ
-    const char* server_addr = "127.0.0.1";
-    int server_port = 8888;
+    // è®¾ç½®æœåŠ¡å™¨åœ°å€å’Œç«¯å£å·
     struct sockaddr_in server;
     memset(&server, 0, sizeof(server));
-
     server.sin_family = AF_INET;
     server.sin_port = htons(server_port);
 
@@ -68,10 +78,10 @@ int main() {
         return -1;
     }
 
-    // ½« socket °ó¶¨µ½ SSL ¶ÔÏó
+    // å°† socket ç»‘å®šåˆ° SSL å¯¹è±¡
     SSL_set_fd(ssl, sockfd);
 
-    // ½øĞĞ TLS ÎÕÊÖ
+    // è¿›è¡Œ TLS æ¡æ‰‹
     if (SSL_connect(ssl) <= 0) {
         std::cerr << "TLS handshake failed" << std::endl;
         ERR_print_errors_fp(stderr);
@@ -82,7 +92,7 @@ int main() {
         return -1;
     }
 
-    // ·¢ËÍºÍ½ÓÊÕÊı¾İ
+    // å‘é€å’Œæ¥æ”¶æ•°æ®
     const char* message = "Hello from client!";
     char buffer[1024];
     SSL_write(ssl, message, strlen(message));
@@ -95,7 +105,7 @@ int main() {
         std::cerr << "SSL_read failed" << std::endl;
     }
 
-    // ¹Ø±ÕÁ¬½Ó²¢ÊÍ·Å×ÊÔ´
+    // å…³é—­è¿æ¥å¹¶é‡Šæ”¾èµ„æº
     SSL_shutdown(ssl);
     SSL_free(ssl);
     closesocket(sockfd);

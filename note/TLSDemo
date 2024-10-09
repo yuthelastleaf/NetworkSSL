@@ -2,7 +2,7 @@
 
 ## 项目编译
 
-使用的编译器是visual studio 2019,其中openssl是通过vcpkg获取的。
+使用的编译器是visual studio 2019,其中openssl是通过vcpkg获取的，本demo是单向认证，即客户端认证服务器，服务器不认证客户端。
 
 ### vcpkg使用方法
 
@@ -31,6 +31,17 @@ git@github.com:microsoft/vcpkg.git
 
 ## TLS 客户端
 
+仅创建一个socket连接到服务端，然后使用ssl api进行握手，握手成功后就可以进行数据传输了。
+
 ## TLS 服务器
 
+仅使用一个socket监听端口，然后使用ssl api进行握手，握手成功后就可以进行数据传输了。
+
+注意服务器需要先生成证书，我这里的项目直接去指定目录复制了测试证书到生成目录下，所以如果是调试的话，需要先把证书放到项目目录下才行，我这里没有直接复制，主要看需求，反正一个命令行的事情。以下是证书生成的命令行，如果需要就自己生成证书也可以，我主要是为了方便使用就专门生成了一个测试样例。
+
+```shell
+openssl genrsa -out server.key 2048
+openssl req -new -key server.key -out server.csr
+openssl x509 -req -days 365 -in server.csr -signkey server.key -out server.crt
+```
 
