@@ -1016,6 +1016,46 @@ AlpcGetCompletionListMessageAttributes(
 	_In_ PPORT_MESSAGE Message
 );
 
+/******************************************声明未文档化方法***********************************************/
+NTSYSAPI
+NTSTATUS
+NTAPI
+ZwAlpcCreatePort(
+	_Out_ PHANDLE PortHandle,
+	_In_opt_ POBJECT_ATTRIBUTES ObjectAttributes,
+	_In_opt_ PALPC_PORT_ATTRIBUTES PortAttributes
+);
+
+NTSYSCALLAPI
+NTSTATUS
+NTAPI
+ZwAlpcSendWaitReceivePort(
+	_In_ HANDLE PortHandle,
+	_In_ ULONG Flags,
+	_In_reads_bytes_opt_(SendMessage->u1.s1.TotalLength) PPORT_MESSAGE SendMessage,
+	_Inout_opt_ PALPC_MESSAGE_ATTRIBUTES SendMessageAttributes,
+	_Out_writes_bytes_to_opt_(*BufferLength, *BufferLength) PPORT_MESSAGE ReceiveMessage,
+	_Inout_opt_ PSIZE_T BufferLength,
+	_Inout_opt_ PALPC_MESSAGE_ATTRIBUTES ReceiveMessageAttributes,
+	_In_opt_ PLARGE_INTEGER Timeout
+);
+
+NTSYSCALLAPI
+NTSTATUS
+NTAPI
+ZwAlpcAcceptConnectPort(
+	_Out_ PHANDLE PortHandle,
+	_In_ HANDLE ConnectionPortHandle,
+	_In_ ULONG Flags,
+	_In_opt_ POBJECT_ATTRIBUTES ObjectAttributes,
+	_In_opt_ PALPC_PORT_ATTRIBUTES PortAttributes,
+	_In_opt_ PVOID PortContext,
+	_In_reads_bytes_(ConnectionRequest->u1.s1.TotalLength) PPORT_MESSAGE ConnectionRequest,
+	_Inout_opt_ PALPC_MESSAGE_ATTRIBUTES ConnectionMessageAttributes,
+	_In_ BOOLEAN AcceptConnection
+);
+
+/***********************************************************************************************************/
 
 
 /******************************************定义为函数指针类型***********************************************/
@@ -1259,6 +1299,22 @@ static PVOID GetAPIAddress(PCWSTR funcname) {
 
 #define CALLAPI(func) \
         ((func##_FuncType)GetAPIAddress(L#func))
+
+#define GETAPINORTN(funcname, funcaddress)      \
+    funcname##_FuncType funcaddress =                \
+        (funcname##_FuncType)GetAPIAddress(L#funcname); \
+    if (funcaddress == NULL) {                       \
+        return;                             \
+    }
+
+#define GETAPIRTN(funcname, funcaddress, retValue)      \
+    funcname##_FuncType funcaddress =                \
+        (funcname##_FuncType)GetAPIAddress(L#funcname); \
+    if (funcaddress == NULL) {                       \
+        return retValue;                             \
+    }
+
+
 #else
 #define CALLAPI(func) \
         (GetProcAddress(GetModuleHandleW(L"ntdll.dll"), #func))
