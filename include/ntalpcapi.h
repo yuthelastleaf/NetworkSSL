@@ -1,7 +1,15 @@
 #pragma once
 #ifndef _NTLPCAPI_H
 #define _NTLPCAPI_H
+
+// ignore the warning of 4201
+#pragma warning(disable: 4201)
+
+#ifdef _KERNEL_MODE
+#include <wdm.h>
+#endif
 #include <windef.h>
+
 
 // Local Inter-process Communication
 
@@ -440,7 +448,13 @@ typedef struct DECLSPEC_ALIGN(128) _ALPC_COMPLETION_LIST_HEADER
 	DECLSPEC_ALIGN(128) ULONG PostCount;
 	DECLSPEC_ALIGN(128) ULONG ReturnCount;
 	DECLSPEC_ALIGN(128) ULONG LogSequenceNumber;
+
+	// the lock of kernel and user is different
+#ifdef _KERNEL_MODE
+	DECLSPEC_ALIGN(128) KSPIN_LOCK UserLock;
+#else 
 	DECLSPEC_ALIGN(128) RTL_SRWLOCK UserLock;
+#endif
 
 	ULONG64 EndMagic;
 } ALPC_COMPLETION_LIST_HEADER, *PALPC_COMPLETION_LIST_HEADER;
@@ -1002,13 +1016,249 @@ AlpcGetCompletionListMessageAttributes(
 	_In_ PPORT_MESSAGE Message
 );
 
+
+
+/******************************************定义为函数指针类型***********************************************/
+typedef NTSTATUS(*NtAlpcCreatePort_FuncType)(
+	_Out_ PHANDLE PortHandle,
+	_In_opt_ POBJECT_ATTRIBUTES ObjectAttributes,
+	_In_opt_ PALPC_PORT_ATTRIBUTES PortAttributes
+	);
+
+typedef NTSTATUS(*NtAlpcDisconnectPort_FuncType)(
+	_In_ HANDLE PortHandle,
+	_In_ ULONG Flags
+	);
+
+typedef NTSTATUS(*NtAlpcQueryInformation_FuncType)(
+	_In_opt_ HANDLE PortHandle,
+	_In_ ALPC_PORT_INFORMATION_CLASS PortInformationClass,
+	_Inout_updates_bytes_to_(Length, *ReturnLength) PVOID PortInformation,
+	_In_ ULONG Length,
+	_Out_opt_ PULONG ReturnLength
+	);
+
+typedef NTSTATUS(*NtAlpcSetInformation_FuncType)(
+	_In_ HANDLE PortHandle,
+	_In_ ALPC_PORT_INFORMATION_CLASS PortInformationClass,
+	_In_reads_bytes_opt_(Length) PVOID PortInformation,
+	_In_ ULONG Length
+	);
+
+typedef NTSTATUS(*NtAlpcCreatePortSection_FuncType)(
+	_In_ HANDLE PortHandle,
+	_In_ ULONG Flags,
+	_In_opt_ HANDLE SectionHandle,
+	_In_ SIZE_T SectionSize,
+	_Out_ PALPC_HANDLE AlpcSectionHandle,
+	_Out_ PSIZE_T ActualSectionSize
+	);
+
+typedef NTSTATUS(*NtAlpcDeletePortSection_FuncType)(
+	_In_ HANDLE PortHandle,
+	_Reserved_ ULONG Flags,
+	_In_ ALPC_HANDLE SectionHandle
+	);
+
+typedef NTSTATUS(*NtAlpcCreateResourceReserve_FuncType)(
+	_In_ HANDLE PortHandle,
+	_Reserved_ ULONG Flags,
+	_In_ SIZE_T MessageSize,
+	_Out_ PALPC_HANDLE ResourceId
+	);
+
+typedef NTSTATUS(*NtAlpcDeleteResourceReserve_FuncType)(
+	_In_ HANDLE PortHandle,
+	_Reserved_ ULONG Flags,
+	_In_ ALPC_HANDLE ResourceId
+	);
+
+typedef NTSTATUS(*NtAlpcCreateSectionView_FuncType)(
+	_In_ HANDLE PortHandle,
+	_Reserved_ ULONG Flags,
+	_Inout_ PALPC_DATA_VIEW_ATTR ViewAttributes
+	);
+
+typedef NTSTATUS(*NtAlpcDeleteSectionView_FuncType)(
+	_In_ HANDLE PortHandle,
+	_Reserved_ ULONG Flags,
+	_In_ PVOID ViewBase
+	);
+
+typedef NTSTATUS(*NtAlpcCreateSecurityContext_FuncType)(
+	_In_ HANDLE PortHandle,
+	_Reserved_ ULONG Flags,
+	_Inout_ PALPC_SECURITY_ATTR SecurityAttribute
+	);
+
+typedef NTSTATUS(*NtAlpcDeleteSecurityContext_FuncType)(
+	_In_ HANDLE PortHandle,
+	_Reserved_ ULONG Flags,
+	_In_ ALPC_HANDLE ContextHandle
+	);
+
+typedef NTSTATUS(*NtAlpcRevokeSecurityContext_FuncType)(
+	_In_ HANDLE PortHandle,
+	_Reserved_ ULONG Flags,
+	_In_ ALPC_HANDLE ContextHandle
+	);
+
+typedef NTSTATUS(*NtAlpcQueryInformationMessage_FuncType)(
+	_In_ HANDLE PortHandle,
+	_In_ PPORT_MESSAGE PortMessage,
+	_In_ ALPC_MESSAGE_INFORMATION_CLASS MessageInformationClass,
+	_Out_writes_bytes_to_opt_(Length, *ReturnLength) PVOID MessageInformation,
+	_In_ ULONG Length,
+	_Out_opt_ PULONG ReturnLength
+	);
+
+typedef NTSTATUS(*NtAlpcConnectPort_FuncType)(
+	_Out_ PHANDLE PortHandle,
+	_In_ PUNICODE_STRING PortName,
+	_In_opt_ POBJECT_ATTRIBUTES ObjectAttributes,
+	_In_opt_ PALPC_PORT_ATTRIBUTES PortAttributes,
+	_In_ ULONG Flags,
+	_In_opt_ PSID RequiredServerSid,
+	_Inout_updates_bytes_to_opt_(*BufferLength, *BufferLength) PPORT_MESSAGE ConnectionMessage,
+	_Inout_opt_ PULONG BufferLength,
+	_Inout_opt_ PALPC_MESSAGE_ATTRIBUTES OutMessageAttributes,
+	_Inout_opt_ PALPC_MESSAGE_ATTRIBUTES InMessageAttributes,
+	_In_opt_ PLARGE_INTEGER Timeout
+	);
+
+typedef NTSTATUS(*NtAlpcAcceptConnectPort_FuncType)(
+	_Out_ PHANDLE PortHandle,
+	_In_ HANDLE ConnectionPortHandle,
+	_In_ ULONG Flags,
+	_In_opt_ POBJECT_ATTRIBUTES ObjectAttributes,
+	_In_opt_ PALPC_PORT_ATTRIBUTES PortAttributes,
+	_In_opt_ PVOID PortContext,
+	_In_reads_bytes_(ConnectionRequest->u1.s1.TotalLength) PPORT_MESSAGE ConnectionRequest,
+	_Inout_opt_ PALPC_MESSAGE_ATTRIBUTES ConnectionMessageAttributes,
+	_In_ BOOLEAN AcceptConnection
+	);
+
+typedef NTSTATUS(*NtAlpcSendWaitReceivePort_FuncType)(
+	_In_ HANDLE PortHandle,
+	_In_ ULONG Flags,
+	_In_reads_bytes_opt_(SendMessage->u1.s1.TotalLength) PPORT_MESSAGE SendMessage,
+	_Inout_opt_ PALPC_MESSAGE_ATTRIBUTES SendMessageAttributes,
+	_Out_writes_bytes_to_opt_(*BufferLength, *BufferLength) PPORT_MESSAGE ReceiveMessage,
+	_Inout_opt_ PSIZE_T BufferLength,
+	_Inout_opt_ PALPC_MESSAGE_ATTRIBUTES ReceiveMessageAttributes,
+	_In_opt_ PLARGE_INTEGER Timeout
+	);
+
+typedef NTSTATUS(*NtAlpcCancelMessage_FuncType)(
+	_In_ HANDLE PortHandle,
+	_In_ ULONG Flags,
+	_In_ PALPC_CONTEXT_ATTR MessageContext
+	);
+
+typedef NTSTATUS(*NtAlpcImpersonateClientOfPort_FuncType)(
+	_In_ HANDLE PortHandle,
+	_In_ PPORT_MESSAGE Message,
+	_In_ PVOID Flags
+	);
+
+typedef NTSTATUS(*NtAlpcOpenSenderProcess_FuncType)(
+	_Out_ PHANDLE ProcessHandle,
+	_In_ HANDLE PortHandle,
+	_In_ PPORT_MESSAGE PortMessage,
+	_In_ ULONG Flags,
+	_In_ ACCESS_MASK DesiredAccess,
+	_In_ POBJECT_ATTRIBUTES ObjectAttributes
+	);
+
+typedef NTSTATUS(*NtAlpcOpenSenderThread_FuncType)(
+	_Out_ PHANDLE ThreadHandle,
+	_In_ HANDLE PortHandle,
+	_In_ PPORT_MESSAGE PortMessage,
+	_In_ ULONG Flags,
+	_In_ ACCESS_MASK DesiredAccess,
+	_In_ POBJECT_ATTRIBUTES ObjectAttributes
+	);
+
+typedef ULONG(*AlpcMaxAllowedMessageLength_FuncType)(VOID);
+
+typedef ULONG(*AlpcGetHeaderSize_FuncType)(_In_ ULONG Flags);
+
+typedef NTSTATUS(*AlpcInitializeMessageAttribute_FuncType)(
+	_In_ ULONG AttributeFlags,
+	_Out_opt_ PALPC_MESSAGE_ATTRIBUTES Buffer,
+	_In_ ULONG BufferSize,
+	_Out_ PULONG RequiredBufferSize
+	);
+
+typedef PVOID(*AlpcGetMessageAttribute_FuncType)(
+	_In_ PALPC_MESSAGE_ATTRIBUTES Buffer,
+	_In_ ULONG AttributeFlag
+	);
+
+typedef NTSTATUS(*AlpcRegisterCompletionList_FuncType)(
+	_In_ HANDLE PortHandle,
+	_Out_ PALPC_COMPLETION_LIST_HEADER Buffer,
+	_In_ ULONG Size,
+	_In_ ULONG ConcurrencyCount,
+	_In_ ULONG AttributeFlags
+	);
+
+typedef NTSTATUS(*AlpcUnregisterCompletionList_FuncType)(_In_ HANDLE PortHandle);
+
+typedef NTSTATUS(*AlpcAdjustCompletionListConcurrencyCount_FuncType)(
+	_In_ HANDLE PortHandle,
+	_In_ ULONG ConcurrencyCount
+	);
+
+typedef BOOLEAN(*AlpcRegisterCompletionListWorkerThread_FuncType)(_Inout_ PVOID CompletionList);
+
+typedef BOOLEAN(*AlpcUnregisterCompletionListWorkerThread_FuncType)(_Inout_ PVOID CompletionList);
+
+typedef VOID(*AlpcGetCompletionListLastMessageInformation_FuncType)(
+	_In_ PVOID CompletionList,
+	_Out_ PULONG LastMessageId,
+	_Out_ PULONG LastCallbackId
+	);
+
+typedef ULONG(*AlpcGetOutstandingCompletionListMessageCount_FuncType)(_In_ PVOID CompletionList);
+
+typedef PPORT_MESSAGE(*AlpcGetMessageFromCompletionList_FuncType)(
+	_In_ PVOID CompletionList,
+	_Out_opt_ PALPC_MESSAGE_ATTRIBUTES* MessageAttributes
+	);
+
+typedef VOID(*AlpcFreeCompletionListMessage_FuncType)(
+	_Inout_ PVOID CompletionList,
+	_In_ PPORT_MESSAGE Message
+	);
+
+typedef PALPC_MESSAGE_ATTRIBUTES(*AlpcGetCompletionListMessageAttributes_FuncType)(
+	_In_ PVOID CompletionList,
+	_In_ PPORT_MESSAGE Message
+	);
+
+/***********************************************************************************************************/
+
 #endif
 
 // end_private
 
 #ifdef _KERNEL_MODE
+
+#define MAX_MSG_LEN 0x500
+
+#ifndef ALPCTAG
+#define ALPCTAG 'cpla'
+#endif
+
+static PVOID GetAPIAddress(PCWSTR funcname) {
+	UNICODE_STRING functionName;
+	RtlInitUnicodeString(&functionName, funcname);
+	return MmGetSystemRoutineAddress(&functionName);
+}
+
 #define CALLAPI(func) \
-        ((func ## _FuncType)MmGetSystemRoutineAddress(&functionName))
+        ((func##_FuncType)GetAPIAddress(L#func))
 #else
 #define CALLAPI(func) \
         (GetProcAddress(GetModuleHandleW(L"ntdll.dll"), #func))

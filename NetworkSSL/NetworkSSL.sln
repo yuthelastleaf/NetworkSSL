@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 17
-VisualStudioVersion = 17.4.33110.190
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.34301.259
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "TLSServer", "TLSServer\TLSServer.vcxproj", "{420035A7-1ABA-4E3A-A92F-CFECAFF8C490}"
 EndProject
@@ -14,6 +14,10 @@ EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ALPCClient", "ALPCClient\ALPCClient.vcxproj", "{56A03E56-8218-4998-B462-D5F548C687B6}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "ALPC", "ALPC", "{47B76CBF-3AB3-46E5-8DF2-80306EFCD9E0}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "CJSON", "CJSON", "{9A376E1F-32C9-4CCB-8187-D49F0DF2A2F1}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "CJsonSample", "CJsonSample\CJsonSample.vcxproj", "{D23355DA-619E-44D4-9447-E0FBD104B859}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -55,6 +59,14 @@ Global
 		{56A03E56-8218-4998-B462-D5F548C687B6}.Release|x64.Build.0 = Release|x64
 		{56A03E56-8218-4998-B462-D5F548C687B6}.Release|x86.ActiveCfg = Release|Win32
 		{56A03E56-8218-4998-B462-D5F548C687B6}.Release|x86.Build.0 = Release|Win32
+		{D23355DA-619E-44D4-9447-E0FBD104B859}.Debug|x64.ActiveCfg = Debug|x64
+		{D23355DA-619E-44D4-9447-E0FBD104B859}.Debug|x64.Build.0 = Debug|x64
+		{D23355DA-619E-44D4-9447-E0FBD104B859}.Debug|x86.ActiveCfg = Debug|Win32
+		{D23355DA-619E-44D4-9447-E0FBD104B859}.Debug|x86.Build.0 = Debug|Win32
+		{D23355DA-619E-44D4-9447-E0FBD104B859}.Release|x64.ActiveCfg = Release|x64
+		{D23355DA-619E-44D4-9447-E0FBD104B859}.Release|x64.Build.0 = Release|x64
+		{D23355DA-619E-44D4-9447-E0FBD104B859}.Release|x86.ActiveCfg = Release|Win32
+		{D23355DA-619E-44D4-9447-E0FBD104B859}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -64,6 +76,7 @@ Global
 		{3A6F1520-B579-4C38-AD1C-FEECCB3C0AD3} = {096317C3-E1BC-4B16-BAFA-7E4C5B7A5A39}
 		{631491C0-1334-4F85-9FB4-043565CAA408} = {47B76CBF-3AB3-46E5-8DF2-80306EFCD9E0}
 		{56A03E56-8218-4998-B462-D5F548C687B6} = {47B76CBF-3AB3-46E5-8DF2-80306EFCD9E0}
+		{D23355DA-619E-44D4-9447-E0FBD104B859} = {9A376E1F-32C9-4CCB-8187-D49F0DF2A2F1}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {415CF697-4243-436E-B146-09FD10C4E1B9}
