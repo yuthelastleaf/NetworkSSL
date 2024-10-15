@@ -1277,6 +1277,13 @@ typedef PALPC_MESSAGE_ATTRIBUTES(*AlpcGetCompletionListMessageAttributes_FuncTyp
 	_In_ PPORT_MESSAGE Message
 	);
 
+// 以下为应用层使用
+typedef VOID(*RtlInitUnicodeString_FuncType)(
+	PUNICODE_STRING DestinationString,
+	PCWSTR SourceString
+	);
+
+
 /***********************************************************************************************************/
 
 #endif
@@ -1316,8 +1323,19 @@ static PVOID GetAPIAddress(PCWSTR funcname) {
 
 
 #else
-#define CALLAPI(func) \
-        (GetProcAddress(GetModuleHandleW(L"ntdll.dll"), #func))
+
+static PVOID GetAPIAddress(LPCSTR funcname) {
+	PVOID res = NULL;
+	HMODULE hntdll = GetModuleHandle(L"ntdll.dll");
+	if (hntdll) {
+		res = GetProcAddress(hntdll, funcname);
+	}
+	return res;
+}
+
+#define DEFAPI(func) \
+		func##_FuncType pfunc_##func = (func##_FuncType)(GetAPIAddress(#func))
+
 #endif
 
 

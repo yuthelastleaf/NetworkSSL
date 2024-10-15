@@ -2,6 +2,7 @@
 #include <winternl.h>
 #include <stdio.h>
 #include "../../include/ntalpcapi.h"
+#include "../../include/CJSON/cJSON.h"
 
 #define MSG_LEN 0x100
 
@@ -18,23 +19,28 @@ LPVOID CreateMsgMem(PPORT_MESSAGE PortMessage, SIZE_T MessageSize, LPVOID Messag
 
 void main()
 {
-    UNICODE_STRING  usPort;
+    UNICODE_STRING  usPort = { 0 };
     PORT_MESSAGE    pmSend;
     PORT_MESSAGE    pmReceive;
     NTSTATUS        ntRet;
     BOOLEAN         bBreak;
     SIZE_T          nLen;
-    HANDLE          hPort;
+    HANDLE          hPort = NULL;
     LPVOID          lpMem; 
-    CHAR            szInput[MSG_LEN];
+    char            szInput[MSG_LEN];
+
+    DEFAPI(RtlInitUnicodeString);
+    DEFAPI(NtAlpcConnectPort);
+    DEFAPI(NtAlpcSendWaitReceivePort);
+
 
     printf("ALPC-Example Client\n");
-    CALLAPI(RtlInitUnicodeString)(&usPort, L"\\RPC Control\\NameOfPort");
+    pfunc_RtlInitUnicodeString(&usPort, L"\\RPC Control\\NameOfPort");
     RtlSecureZeroMemory(&pmSend, sizeof(pmSend));
     pmSend.u1.s1.DataLength = MSG_LEN;
     pmSend.u1.s1.TotalLength = pmSend.u1.s1.DataLength + sizeof(pmSend);
-    lpMem = CreateMsgMem(&pmSend, MSG_LEN, L"Hello World!");
-    ntRet = CALLAPI(NtAlpcConnectPort)(&hPort, &usPort, NULL, NULL, 0, NULL, NULL, NULL, NULL, NULL, NULL);
+    lpMem = CreateMsgMem(&pmSend, MSG_LEN, (LPVOID)L"Hello World!");
+    ntRet = pfunc_NtAlpcConnectPort(&hPort, &usPort, NULL, NULL, 0, NULL, NULL, NULL, NULL, NULL, NULL);
 
     printf("[i] NtAlpcConnectPort: 0x%X\n", ntRet);
     if (!ntRet)
@@ -46,11 +52,19 @@ void main()
             RtlSecureZeroMemory(&pmSend, sizeof(pmSend));
             RtlSecureZeroMemory(&szInput, sizeof(szInput));
             printf("[.] Enter Message > ");
-            fgets(&szInput, MSG_LEN, stdin);
+            fgets(szInput, MSG_LEN, stdin);
+
+            // 1. 创建一个JSON对象
+            cJSON* root = cJSON_CreateObject();
+            cJSON_AddStringToObject(root, "info", szInput);
+            cJSON_AddStringToObject(root, "type", "test");
+
+            
+
             pmSend.u1.s1.DataLength = strlen(szInput);
             pmSend.u1.s1.TotalLength = pmSend.u1.s1.DataLength + sizeof(PORT_MESSAGE);
             lpMem = CreateMsgMem(&pmSend, pmSend.u1.s1.DataLength, &szInput);
-            ntRet = CALLAPI(NtAlpcSendWaitReceivePort)(hPort, 0, (PPORT_MESSAGE)lpMem, NULL, NULL, NULL, NULL, NULL);
+            ntRet = pfunc_NtAlpcSendWaitReceivePort(hPort, 0, (PPORT_MESSAGE)lpMem, NULL, NULL, NULL, NULL, NULL);
             printf("[i] NtAlpcSendWaitReceivePort: 0x%X\n", ntRet);
             HeapFree(GetProcessHeap(), 0, lpMem);
         }
