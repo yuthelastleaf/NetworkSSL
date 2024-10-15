@@ -2,49 +2,99 @@
 
 #include "cJSON.h"
 
+
+
 #ifdef __cplusplus
 // C++ 编译
 #include "../StringHandler/StringHandler.h"
 
 #include <memory>
 
+typedef struct cJSONHanlerObj {
+    cJSON* json_obj;
+    cJSON* parent;
+} cJSONHanlerObj;
+
 class CJSONHandler
 {
 public:
 	CJSONHandler() 
-        : m_object(cJSON_CreateObject(), CJSONHandler::cJSONDeleter)
+        : m_object({ cJSON_CreateObject(), nullptr })
     {
 		/*m_object = cJSON_CreateObject();*/
 	}
 
-	CJSONHandler(cJSON* obj)
-        : m_object(obj, CJSONHandler::cJSONDeleter)
+	CJSONHandler(cJSON* obj, cJSON* parent)
+        : m_object({ obj, parent })
     {
 	}
 
-    CJSONHandler(std::shared_ptr<cJSON> obj)
-        : m_object(obj)
-    {
-    }
-
 	~CJSONHandler() {
+        if (!m_object.parent) {
+            cJSON_Delete(m_object.json_obj);
+        }
 	}
 
 public:
+    bool SetString(const wchar_t* value) {
+        bool flag = false;
+        char* pvalue = nullptr;
+        if (m_object.json_obj && CStringHandler::WChar2Ansi(value, pvalue)) {
+            // 将当前对象设置为字符串类型，并赋予新值
+            m_object.json_obj->type = cJSON_String;
+            flag = cJSON_SetValuestring(m_object.json_obj, pvalue);
+        }
+        return flag;
+    }
+
+    bool SetString(const char* value) {
+        bool flag = false;
+        if (m_object.json_obj) {
+            m_object.json_obj->type = cJSON_String;
+            flag = cJSON_SetValuestring(m_object.json_obj, value);
+        }
+        return flag;
+    }
+
+    std::shared_ptr<char> GetJsonString() {
+        if (m_object.json_obj) {
+            char* jsonString = cJSON_Print(m_object.json_obj);
+            return std::shared_ptr<char>(jsonString, [](char* ptr) {
+                cJSON_free(ptr);
+                });
+        }
+        return nullptr; // 返回空指针如果对象无效
+    }
+
+public:
     // 重载运算符[]，用于读取元素
-    CJSONHandler operator[](wchar_t* key) const {
-        if (!m_object) {
+    CJSONHandler operator[](const wchar_t* key) const {
+        if (!m_object.json_obj) {
             return CJSONHandler();
         }
-
         char* pkey = nullptr;
         if (CStringHandler::WChar2Ansi(key, pkey)) {
-            std::shared_ptr<cJSON> key_mem(cJSON_GetObjectItemCaseSensitive(m_object.get(), pkey),
-                CJSONHandler::cJSONDeleter);
-            return CJSONHandler(key_mem);
+            cJSON* child = cJSON_GetObjectItemCaseSensitive(m_object.json_obj, pkey);
+            if (!child) {
+                child = cJSON_CreateObject();
+                cJSON_AddItemToObject(m_object.json_obj, pkey, child);
+            }
+            delete[] pkey;
+            return CJSONHandler(child, m_object.json_obj);
         }
-
         return CJSONHandler();
+    }
+
+    CJSONHandler operator[](const char* key) const {
+        if (!m_object.json_obj) {
+            return CJSONHandler();
+        }
+        cJSON* child = cJSON_GetObjectItemCaseSensitive(m_object.json_obj, key);
+        if (!child) {
+            child = cJSON_CreateObject();
+            cJSON_AddItemToObject(m_object.json_obj, key, child);
+        }
+        return CJSONHandler(child, m_object.json_obj);
     }
 
 // 定义一些外部能够使用的静态函数
@@ -55,7 +105,7 @@ public:
     }
 
 private:
-	std::shared_ptr<cJSON> m_object;
+    cJSONHanlerObj m_object;
 };
 
 #endif

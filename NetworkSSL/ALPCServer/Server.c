@@ -27,25 +27,34 @@ void CreatePortAndListen(LPCWSTR PortName)
     SIZE_T                  nLen;
     LPVOID                  lpMem;
     BYTE                    bTemp;
+
+
+    DEFAPI(RtlInitUnicodeString);
+    DEFAPI(NtAlpcCreatePort);
+    DEFAPI(NtAlpcConnectPort);
+    DEFAPI(NtAlpcSendWaitReceivePort);
+    DEFAPI(NtAlpcAcceptConnectPort);
+    DEFAPI(NtAlpcDisconnectPort);
+
 	
-    CALLAPI(RtlInitUnicodeString)(&usPortName, PortName);
+    pfunc_RtlInitUnicodeString(&usPortName, PortName);
     InitializeObjectAttributes(&objPort, &usPortName, 0, 0, 0);
     RtlSecureZeroMemory(&serverPortAttr, sizeof(serverPortAttr));
     serverPortAttr.MaxMessageLength = MAX_MSG_LEN; // For ALPC this can be max of 64KB
 
-    ntRet = CALLAPI(NtAlpcCreatePort)(&hPort, &objPort, &serverPortAttr);
+    ntRet = pfunc_NtAlpcCreatePort(&hPort, &objPort, &serverPortAttr);
     printf("[i] NtAlpcCreatePort: 0x%X\n", ntRet);
     if (!ntRet)
     {
         nLen = sizeof(pmReceive);
-        ntRet = CALLAPI(NtAlpcSendWaitReceivePort)(hPort, 0, NULL, NULL, &pmReceive, &nLen, NULL, NULL);
+        ntRet = pfunc_NtAlpcSendWaitReceivePort(hPort, 0, NULL, NULL, &pmReceive, &nLen, NULL, NULL);
         if (!ntRet)
         {
             RtlSecureZeroMemory(&pmRequest, sizeof(pmRequest));
             pmRequest.MessageId = pmReceive.MessageId;
             pmRequest.u1.s1.DataLength = 0x0;
             pmRequest.u1.s1.TotalLength = pmRequest.u1.s1.DataLength + sizeof(PORT_MESSAGE);
-            ntRet = CALLAPI(NtAlpcAcceptConnectPort)(&hConnectedPort, hPort, 0, NULL, NULL, NULL, &pmRequest, NULL, TRUE); // 0
+            ntRet = pfunc_NtAlpcAcceptConnectPort(&hConnectedPort, hPort, 0, NULL, NULL, NULL, &pmRequest, NULL, TRUE); // 0
             printf("[i] NtAlpcAcceptConnectPort: 0x%X\n", ntRet);
             if (!ntRet)
             {
@@ -54,13 +63,13 @@ void CreatePortAndListen(LPCWSTR PortName)
                 {	
                     nLen = MAX_MSG_LEN;
                     lpMem = AllocMsgMem(nLen);
-                    CALLAPI(NtAlpcSendWaitReceivePort)(hPort, 0, NULL, NULL, (PPORT_MESSAGE)lpMem, &nLen, NULL, NULL);
+                    pfunc_NtAlpcSendWaitReceivePort(hPort, 0, NULL, NULL, (PPORT_MESSAGE)lpMem, &nLen, NULL, NULL);
                     pmReceive = *(PORT_MESSAGE*)lpMem;
                     if (!strcmp((BYTE*)lpMem + sizeof(PORT_MESSAGE), "exit\n"))
                     {
                         printf("[i] Received 'exit' command\n");
                         HeapFree(GetProcessHeap(), 0, lpMem);
-                        ntRet = CALLAPI(NtAlpcDisconnectPort)(hPort, 0);
+                        ntRet = pfunc_NtAlpcDisconnectPort(hPort, 0);
                         printf("[i] NtAlpcDisconnectPort: %X\n", ntRet);
                         CloseHandle(hConnectedPort);
                         CloseHandle(hPort);

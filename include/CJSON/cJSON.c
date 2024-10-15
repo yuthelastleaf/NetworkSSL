@@ -242,19 +242,19 @@ CJSON_PUBLIC(void) cJSON_InitHooks(cJSON_Hooks* hooks)
     if (hooks == NULL)
     {
         /* Reset hooks */
-        global_hooks.allocate = malloc;
-        global_hooks.deallocate = free;
-        global_hooks.reallocate = realloc;
+        global_hooks.allocate = internal_malloc;
+        global_hooks.deallocate = internal_free;
+        global_hooks.reallocate = internal_realloc;
         return;
     }
 
-    global_hooks.allocate = malloc;
+    global_hooks.allocate = internal_malloc;
     if (hooks->malloc_fn != NULL)
     {
         global_hooks.allocate = hooks->malloc_fn;
     }
 
-    global_hooks.deallocate = free;
+    global_hooks.deallocate = internal_free;
     if (hooks->free_fn != NULL)
     {
         global_hooks.deallocate = hooks->free_fn;
@@ -262,9 +262,9 @@ CJSON_PUBLIC(void) cJSON_InitHooks(cJSON_Hooks* hooks)
 
     /* use realloc only if both free and malloc are used */
     global_hooks.reallocate = NULL;
-    if ((global_hooks.allocate == malloc) && (global_hooks.deallocate == free))
+    if ((global_hooks.allocate == internal_malloc) && (global_hooks.deallocate == internal_free))
     {
-        global_hooks.reallocate = realloc;
+        global_hooks.reallocate = internal_realloc;
     }
 }
 
@@ -442,13 +442,18 @@ CJSON_PUBLIC(char*) cJSON_SetValuestring(cJSON *object, const char *valuestring)
         return NULL;
     }
     /* return NULL if the object is corrupted or valuestring is NULL */
-    if (object->valuestring == NULL || valuestring == NULL)
+    if (valuestring == NULL)
     {
         return NULL;
     }
 
+    if (!object->valuestring) {
+        v2_len = 0;
+    }
+    else {
+        v2_len = strlen(object->valuestring);
+    }
     v1_len = strlen(valuestring);
-    v2_len = strlen(object->valuestring);
 
     if (v1_len <= v2_len)
     {

@@ -2,7 +2,7 @@
 #include <winternl.h>
 #include <stdio.h>
 #include "../../include/ntalpcapi.h"
-#include "../../include/CJSON/cJSON.h"
+#include "../../include/CJSON/CJSONHanler.h"
 
 #define MSG_LEN 0x100
 
@@ -54,17 +54,20 @@ void main()
             printf("[.] Enter Message > ");
             fgets(szInput, MSG_LEN, stdin);
 
-            // 1. 创建一个JSON对象
-            cJSON* root = cJSON_CreateObject();
-            cJSON_AddStringToObject(root, "info", szInput);
-            cJSON_AddStringToObject(root, "type", "test");
-
+            CJSONHandler json;
+            json[L"name"].SetString("test");
+            json[L"name"].SetString("bushiba");
+            json[L"info"].SetString("hhh");
+            std::shared_ptr<char> json_string = json.GetJsonString();
             
 
-            pmSend.u1.s1.DataLength = strlen(szInput);
-            pmSend.u1.s1.TotalLength = pmSend.u1.s1.DataLength + sizeof(PORT_MESSAGE);
-            lpMem = CreateMsgMem(&pmSend, pmSend.u1.s1.DataLength, &szInput);
-            ntRet = pfunc_NtAlpcSendWaitReceivePort(hPort, 0, (PPORT_MESSAGE)lpMem, NULL, NULL, NULL, NULL, NULL);
+            if (json_string) {
+                pmSend.u1.s1.DataLength = strlen(json_string.get());
+                pmSend.u1.s1.TotalLength = pmSend.u1.s1.DataLength + sizeof(PORT_MESSAGE);
+                lpMem = CreateMsgMem(&pmSend, pmSend.u1.s1.DataLength, json_string.get());
+
+                ntRet = pfunc_NtAlpcSendWaitReceivePort(hPort, 0, (PPORT_MESSAGE)lpMem, NULL, NULL, NULL, NULL, NULL);
+            }
             printf("[i] NtAlpcSendWaitReceivePort: 0x%X\n", ntRet);
             HeapFree(GetProcessHeap(), 0, lpMem);
         }
