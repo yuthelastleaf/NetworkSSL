@@ -19,6 +19,8 @@ LPVOID CreateMsgMem(PPORT_MESSAGE PortMessage, SIZE_T MessageSize, LPVOID Messag
 
 void main()
 {
+    CStringHandler::InitChinese();
+
     UNICODE_STRING  usPort = { 0 };
     PORT_MESSAGE    pmSend;
     PORT_MESSAGE    pmReceive;
@@ -55,9 +57,11 @@ void main()
             fgets(szInput, MSG_LEN, stdin);
 
             CJSONHandler json;
-            json[L"name"].SetString("test");
-            json[L"name"].SetString("bushiba");
-            json[L"info"].SetString("hhh");
+            json[L"name"] = "test";
+            json[L"name"] = "bushiba";
+            json[L"info"] = "hhh";
+            json[L"newobj"][L"qiantao"][L"lipu"] = L"Ç¶Ì×¶ÔÏó";
+            json[L"name"][L"Ìæ»»"] = "replace";
             std::shared_ptr<char> json_string = json.GetJsonString();
             
 

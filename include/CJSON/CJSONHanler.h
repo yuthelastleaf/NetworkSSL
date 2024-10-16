@@ -97,6 +97,34 @@ public:
         return CJSONHandler(child, m_object.json_obj);
     }
 
+    // 赋值运算符重载
+    CJSONHandler& operator=(const wchar_t* value) {
+        if (cJSON_UpdateType(m_object.json_obj, cJSON_String)) {
+            if (cJSON_UpdateType(m_object.parent, cJSON_Object)) {
+                char* pvalue = nullptr;
+                if (CStringHandler::WChar2Ansi(value, pvalue)) {
+                    cJSON_SetValuestring(m_object.json_obj, pvalue);
+                    delete[] pvalue;
+                }
+            }
+        }
+        return *this;
+    }
+
+    // 赋值运算符重载
+    CJSONHandler& operator=(const char* value) {
+        if (cJSON_UpdateType(m_object.json_obj, cJSON_String)) {
+            if (cJSON_UpdateType(m_object.parent, cJSON_Object)) {
+                cJSON_SetValuestring(m_object.json_obj, value);
+            }
+        }
+        return *this;
+    }
+
+// 定义一些外面需要用到的方法
+private:
+
+
 // 定义一些外部能够使用的静态函数
 public:
     // 定义一个自定义删除器函数

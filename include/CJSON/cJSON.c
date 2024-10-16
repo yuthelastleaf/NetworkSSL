@@ -43,7 +43,12 @@
 #include <stdlib.h>
 #include <limits.h>
 #include <ctype.h>
+#ifdef _KERNEL_MODE
+// ensure not use float
+int _fltused = 0;
+#else
 #include <float.h>
+#endif
 
 #ifdef ENABLE_LOCALES
 #include <locale.h>
@@ -106,6 +111,17 @@ CJSON_PUBLIC(char *) cJSON_GetStringValue(const cJSON * const item)
     return item->valuestring;
 }
 
+#ifdef _KERNEL_MODE
+CJSON_PUBLIC(int) cJSON_GetNumberValue(const cJSON* const item)
+{
+    if (!cJSON_IsNumber(item))
+    {
+        return (int)NAN;
+    }
+
+    return item->valueint;
+}
+#else
 CJSON_PUBLIC(double) cJSON_GetNumberValue(const cJSON * const item)
 {
     if (!cJSON_IsNumber(item))
@@ -115,6 +131,7 @@ CJSON_PUBLIC(double) cJSON_GetNumberValue(const cJSON * const item)
 
     return item->valuedouble;
 }
+#endif
 
 /* This is a safeguard to prevent copy-pasters from using incompatible C and header files */
 #if (CJSON_VERSION_MAJOR != 1) || (CJSON_VERSION_MINOR != 7) || (CJSON_VERSION_PATCH != 18)
@@ -334,13 +351,102 @@ typedef struct
 /* get a pointer to the buffer at the position */
 #define buffer_at_offset(buffer) ((buffer)->content + (buffer)->offset)
 
+#ifdef _KERNEL_MODE
+long kstrtol(const char* str, char** endptr, int base)
+{
+    long result = 0;
+    int sign = 1;
+    const char* start = str;
+
+    // 检查空白字符
+    while (isspace(*str))
+    {
+        str++;
+    }
+
+    // 检查符号
+    if (*str == '-')
+    {
+        sign = -1;
+        str++;
+    }
+    else if (*str == '+')
+    {
+        str++;
+    }
+
+    // 处理进制前缀
+    if ((base == 0 || base == 16) && *str == '0' && (str[1] == 'x' || str[1] == 'X'))
+    {
+        base = 16;
+        str += 2;
+    }
+    else if (base == 0 && *str == '0')
+    {
+        base = 8;
+        str++;
+    }
+    else if (base == 0)
+    {
+        base = 10;
+    }
+
+    // 开始转换
+    while (*str)
+    {
+        int digit;
+
+        if (*str >= '0' && *str <= '9')
+        {
+            digit = *str - '0';
+        }
+        else if (*str >= 'a' && *str <= 'f')
+        {
+            digit = *str - 'a' + 10;
+        }
+        else if (*str >= 'A' && *str <= 'F')
+        {
+            digit = *str - 'A' + 10;
+        }
+        else
+        {
+            break; // 非法字符
+        }
+
+        if (digit >= base)
+        {
+            break; // 非法数字
+        }
+
+        result = result * base + digit;
+        str++;
+    }
+
+    // 设置 endptr
+    if (endptr)
+    {
+        *endptr = (char*)(str > start ? str : start);
+    }
+
+    return sign * result;
+}
+#endif
+
 /* Parse the input text to generate a number, and populate the result into item. */
 static cJSON_bool parse_number(cJSON * const item, parse_buffer * const input_buffer)
 {
+#ifdef _KERNEL_MODE
+    long number = 0;
+#else
     double number = 0;
+#endif
     unsigned char *after_end = NULL;
     unsigned char number_c_string[64];
     unsigned char decimal_point = get_decimal_point();
+#ifdef _KERNEL_MODE
+    size_t dot_pos = 0;
+#endif
+
     size_t i = 0;
 
     if ((input_buffer == NULL) || (input_buffer->content == NULL))
@@ -374,13 +480,38 @@ static cJSON_bool parse_number(cJSON * const item, parse_buffer * const input_bu
 
             case '.':
                 number_c_string[i] = decimal_point;
+#ifdef _KERNEL_MODE
+                if (!dot_pos) {
+                    dot_pos = i;
+                }
+#endif
                 break;
 
             default:
                 goto loop_end;
         }
+
+
+
     }
 loop_end:
+
+#ifdef _KERNEL_MODE
+    if (dot_pos == 0) {
+        number_c_string[i] = '\0';
+    }
+    else {
+        number_c_string[dot_pos] = '\0';
+    }
+
+    number = kstrtol((const char*)number_c_string, (char**)&after_end, 10);
+    if (number_c_string == after_end)
+    {
+        return false; /* parse_error */
+    }
+    after_end = number_c_string + i;
+    item->valueint = number;
+#else
     number_c_string[i] = '\0';
 
     number = strtod((const char*)number_c_string, (char**)&after_end);
@@ -388,15 +519,19 @@ loop_end:
     {
         return false; /* parse_error */
     }
-
     item->valuedouble = number;
+#endif
 
     /* use saturation in case of overflow */
     if (number >= INT_MAX)
     {
         item->valueint = INT_MAX;
     }
+#ifdef _KERNEL_MODE
+    else if (number <= (long)INT_MIN)
+#else
     else if (number <= (double)INT_MIN)
+#endif
     {
         item->valueint = INT_MIN;
     }
@@ -412,13 +547,21 @@ loop_end:
 }
 
 /* don't ask me, but the original cJSON_SetNumberValue returns an integer or double */
+#ifdef _KERNEL_MODE
+CJSON_PUBLIC(int) cJSON_SetNumberHelper(cJSON* object, int number)
+#else
 CJSON_PUBLIC(double) cJSON_SetNumberHelper(cJSON *object, double number)
+#endif
 {
     if (number >= INT_MAX)
     {
         object->valueint = INT_MAX;
     }
+#ifdef _KERNEL_MODE
+    else if (number <= (long)INT_MIN)
+#else
     else if (number <= (double)INT_MIN)
+#endif
     {
         object->valueint = INT_MIN;
     }
@@ -427,7 +570,11 @@ CJSON_PUBLIC(double) cJSON_SetNumberHelper(cJSON *object, double number)
         object->valueint = (int)number;
     }
 
+#ifdef _KERNEL_MODE
+    return object->valueint = number;
+#else
     return object->valuedouble = number;
+#endif
 }
 
 /* Note: when passing a NULL valuestring, cJSON_SetValuestring treats this as an error and return NULL */
@@ -589,29 +736,45 @@ static void update_offset(printbuffer * const buffer)
     buffer->offset += strlen((const char*)buffer_pointer);
 }
 
+#ifdef _KERNEL_MODE
+/* securely comparison of integer variables (just in driver) */
+static cJSON_bool compare_int(int a, int b)
+{
+    return a == b;
+}
+#else
 /* securely comparison of floating-point variables */
 static cJSON_bool compare_double(double a, double b)
 {
     double maxVal = fabs(a) > fabs(b) ? fabs(a) : fabs(b);
     return (fabs(a - b) <= maxVal * DBL_EPSILON);
 }
+#endif
+
 
 /* Render the number nicely from the given item into a string. */
 static cJSON_bool print_number(const cJSON * const item, printbuffer * const output_buffer)
 {
     unsigned char *output_pointer = NULL;
+#ifndef _KERNEL_MODE
     double d = item->valuedouble;
+#endif
     int length = 0;
     size_t i = 0;
     unsigned char number_buffer[26] = {0}; /* temporary buffer to print the number into */
     unsigned char decimal_point = get_decimal_point();
+#ifndef _KERNEL_MODE
     double test = 0.0;
+#endif
 
     if (output_buffer == NULL)
     {
         return false;
     }
 
+#ifdef _KERNEL_MODE
+    length = sprintf((char*)number_buffer, "%d", item->valueint);
+#else
     /* This checks for NaN and Infinity */
     if (isnan(d) || isinf(d))
     {
@@ -633,6 +796,7 @@ static cJSON_bool print_number(const cJSON * const item, printbuffer * const out
             length = sprintf((char*)number_buffer, "%1.17g", d);
         }
     }
+#endif
 
     /* sprintf failed or buffer overrun occurred */
     if ((length < 0) || (length > (int)(sizeof(number_buffer) - 1)))
@@ -2189,7 +2353,11 @@ CJSON_PUBLIC(cJSON*) cJSON_AddBoolToObject(cJSON * const object, const char * co
     return NULL;
 }
 
+#ifdef _KERNEL_MODE
+CJSON_PUBLIC(cJSON*) cJSON_AddNumberToObject(cJSON * const object, const char * const name, const int number)
+#else
 CJSON_PUBLIC(cJSON*) cJSON_AddNumberToObject(cJSON * const object, const char * const name, const double number)
+#endif
 {
     cJSON *number_item = cJSON_CreateNumber(number);
     if (add_item_to_object(object, name, number_item, &global_hooks, false))
@@ -2495,21 +2663,30 @@ CJSON_PUBLIC(cJSON *) cJSON_CreateBool(cJSON_bool boolean)
 
     return item;
 }
-
+#ifdef _KERNEL_MODE
+CJSON_PUBLIC(cJSON *) cJSON_CreateNumber(int num)
+#else
 CJSON_PUBLIC(cJSON *) cJSON_CreateNumber(double num)
+#endif
 {
     cJSON *item = cJSON_New_Item(&global_hooks);
     if(item)
     {
         item->type = cJSON_Number;
+#ifndef _KERNEL_MODE
         item->valuedouble = num;
+#endif
 
         /* use saturation in case of overflow */
         if (num >= INT_MAX)
         {
             item->valueint = INT_MAX;
         }
+#ifdef _KERNEL_MODE
+        else if (num <= (long)INT_MIN)
+#else
         else if (num <= (double)INT_MIN)
+#endif
         {
             item->valueint = INT_MIN;
         }
@@ -2651,7 +2828,7 @@ CJSON_PUBLIC(cJSON *) cJSON_CreateIntArray(const int *numbers, int count)
 
     return a;
 }
-
+#ifndef _KERNEL_MODE
 CJSON_PUBLIC(cJSON *) cJSON_CreateFloatArray(const float *numbers, int count)
 {
     size_t i = 0;
@@ -2731,7 +2908,7 @@ CJSON_PUBLIC(cJSON *) cJSON_CreateDoubleArray(const double *numbers, int count)
 
     return a;
 }
-
+#endif
 CJSON_PUBLIC(cJSON *) cJSON_CreateStringArray(const char *const *strings, int count)
 {
     size_t i = 0;
@@ -2801,7 +2978,9 @@ cJSON * cJSON_Duplicate_rec(const cJSON *item, size_t depth, cJSON_bool recurse)
     /* Copy over all vars */
     newitem->type = item->type & (~cJSON_IsReference);
     newitem->valueint = item->valueint;
+#ifndef _KERNEL_MODE
     newitem->valuedouble = item->valuedouble;
+#endif
     if (item->valuestring)
     {
         newitem->valuestring = (char*)cJSON_strdup((unsigned char*)item->valuestring, &global_hooks);
@@ -3102,10 +3281,17 @@ CJSON_PUBLIC(cJSON_bool) cJSON_Compare(const cJSON * const a, const cJSON * cons
             return true;
 
         case cJSON_Number:
+#ifdef _KERNEL_MODE
+            if (compare_int(a->valueint, b->valueint))
+            {
+                return true;
+            }
+#else
             if (compare_double(a->valuedouble, b->valuedouble))
             {
                 return true;
             }
+#endif
             return false;
 
         case cJSON_String:
@@ -3197,4 +3383,63 @@ CJSON_PUBLIC(void) cJSON_free(void *object)
 {
     global_hooks.deallocate(object);
     object = NULL;
+}
+
+// new function by yulastleaf
+CJSON_PUBLIC(cJSON_bool) cJSON_UpdateType(cJSON* const item, int type)
+{
+    cJSON_bool flag = cJSON_False;
+
+    if (item) {
+        switch ((item->type) & 0xFF) {
+        case cJSON_Invalid:
+        case cJSON_False:
+        case cJSON_True:
+        case cJSON_NULL:
+            item->type = type;
+            flag = cJSON_True;
+            break;
+        case cJSON_Number:
+            if (type ^ item->type) {
+                item->type = type;
+                item->valueint = 0;
+#ifndef _KERNEL_MODE
+                item->valuedouble = 0;
+#endif
+            }
+            flag = cJSON_True;
+            break;
+        case cJSON_String:
+            if (type ^ item->type) {
+                item->type = type;
+                cJSON_free(item->valuestring);
+                item->valuestring = NULL;
+            }
+            flag = cJSON_True;
+            break;
+        case cJSON_Array:
+            break;
+        case cJSON_Object:
+            if (type ^ item->type) {
+                item->type = type;
+                cJSON_Delete(item->child);
+            }
+            flag = cJSON_True;
+            break;
+        case cJSON_Raw:
+            if (type ^ item->type) {
+                item->type = type;
+                cJSON_free(item->valuestring);
+                item->valuestring = NULL;
+            }
+            flag = cJSON_True;
+            break;
+        default:
+            item->type = type;
+            flag = cJSON_True;
+            break;
+        }
+    }
+
+    return flag;
 }

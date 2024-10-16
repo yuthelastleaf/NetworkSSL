@@ -56,6 +56,9 @@ void CreatePortAndListen(LPCWSTR PortName)
             pmRequest.u1.s1.TotalLength = pmRequest.u1.s1.DataLength + sizeof(PORT_MESSAGE);
             ntRet = pfunc_NtAlpcAcceptConnectPort(&hConnectedPort, hPort, 0, NULL, NULL, NULL, &pmRequest, NULL, TRUE); // 0
             printf("[i] NtAlpcAcceptConnectPort: 0x%X\n", ntRet);
+
+            LARGE_INTEGER timeout;
+            timeout.QuadPart = -50000000LL;  // 500毫秒，以100纳秒为单位
             if (!ntRet)
             {
                 bBreak = TRUE;
@@ -63,7 +66,31 @@ void CreatePortAndListen(LPCWSTR PortName)
                 {	
                     nLen = MAX_MSG_LEN;
                     lpMem = AllocMsgMem(nLen);
-                    pfunc_NtAlpcSendWaitReceivePort(hPort, 0, NULL, NULL, (PPORT_MESSAGE)lpMem, &nLen, NULL, NULL);
+                    pfunc_NtAlpcSendWaitReceivePort(hPort, 0, NULL, NULL, (PPORT_MESSAGE)lpMem, &nLen, NULL, &timeout);
+
+
+                    if (ntRet == STATUS_TIMEOUT) {
+                        // 超时后可以执行其他检测连接状态的逻辑，例如心跳检查
+                        // 如果需要，也可以继续循环等待
+                        printf("[i] Connection timed out, checking connection status...\n");
+                        continue;
+                    }
+                    else if (!NT_SUCCESS(ntRet)) {
+                        // 出现错误时，处理断开连接逻辑
+                        printf("[!] Connection lost or receive error: 0x%X\n", ntRet);
+                        HeapFree(GetProcessHeap(), 0, lpMem);
+                        pfunc_NtAlpcDisconnectPort(hPort, 0);
+                        CloseHandle(hConnectedPort);
+
+                        ntRet = pfunc_NtAlpcAcceptConnectPort(&hConnectedPort, hPort, 0, NULL, NULL, NULL, &pmRequest, NULL, TRUE); // 0
+                        printf("[i] NtAlpcAcceptConnectPort: 0x%X\n", ntRet);
+                        if (!ntRet) {
+                            ExitThread(0);
+                            break;
+                        }
+                        continue;
+                    }
+
                     pmReceive = *(PORT_MESSAGE*)lpMem;
                     if (!strcmp((BYTE*)lpMem + sizeof(PORT_MESSAGE), "exit\n"))
                     {
@@ -78,12 +105,13 @@ void CreatePortAndListen(LPCWSTR PortName)
                     else
                     {
                         printf("[i] Received Data: ");
-                        for (int i = 0; i <= pmReceive.u1.s1.DataLength; i++)
+                        /*for (int i = 0; i <= pmReceive.u1.s1.DataLength; i++)
                         {
                             bTemp = *(BYTE*)((BYTE*)lpMem + i + sizeof(PORT_MESSAGE));
                             printf("0x%X ", bTemp);
-                        }
-                        printf("\n");
+                        }*/
+                        char* data = ((BYTE*)lpMem + sizeof(PORT_MESSAGE));
+                        printf("%s\n", data);
                         HeapFree(GetProcessHeap(), 0, lpMem);
                     }
                 }
