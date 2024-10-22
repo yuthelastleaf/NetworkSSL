@@ -1055,6 +1055,15 @@ ZwAlpcAcceptConnectPort(
 	_In_ BOOLEAN AcceptConnection
 );
 
+NTSYSAPI
+NTSTATUS
+NTAPI
+ZwAlpcDisconnectPort(
+	_In_ HANDLE PortHandle,
+	_In_ ULONG Flags
+);
+
+
 /***********************************************************************************************************/
 
 

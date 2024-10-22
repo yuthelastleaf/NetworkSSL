@@ -19,6 +19,8 @@ LPVOID CreateMsgMem(PPORT_MESSAGE PortMessage, SIZE_T MessageSize, LPVOID Messag
 
 void main()
 {
+    MessageBox(NULL, L"test", L"test", MB_OK);
+
     CStringHandler::InitChinese();
 
     UNICODE_STRING  usPort = { 0 };
@@ -64,6 +66,11 @@ void main()
             json[L"name"][L"Ìæ»»"] = "replace";
             std::shared_ptr<char> json_string = json.GetJsonString();
             
+            // ²éÕÒ²¢ÒÆ³ý»»ÐÐ·û '\n'
+            size_t len = strlen(szInput);
+            if (len > 0 && szInput[len - 1] == '\n') {
+                szInput[len - 1] = '\0';  // ÓÃ¿Õ×Ö·ûÌæ»» '\n'
+            }
 
             if (json_string) {
                 pmSend.u1.s1.DataLength = strlen(json_string.get());
@@ -71,9 +78,23 @@ void main()
                 lpMem = CreateMsgMem(&pmSend, pmSend.u1.s1.DataLength, json_string.get());
 
                 ntRet = pfunc_NtAlpcSendWaitReceivePort(hPort, 0, (PPORT_MESSAGE)lpMem, NULL, NULL, NULL, NULL, NULL);
+
+                HeapFree(GetProcessHeap(), 0, lpMem);
             }
+
+            if (szInput) {
+                RtlSecureZeroMemory(&pmSend, sizeof(pmSend));
+                pmSend.u1.s1.DataLength = strlen(szInput);
+                pmSend.u1.s1.TotalLength = pmSend.u1.s1.DataLength + sizeof(PORT_MESSAGE);
+                lpMem = CreateMsgMem(&pmSend, pmSend.u1.s1.DataLength, szInput);
+
+                ntRet = pfunc_NtAlpcSendWaitReceivePort(hPort, 0, (PPORT_MESSAGE)lpMem, NULL, NULL, NULL, NULL, NULL);
+
+                HeapFree(GetProcessHeap(), 0, lpMem);
+            }
+
             printf("[i] NtAlpcSendWaitReceivePort: 0x%X\n", ntRet);
-            HeapFree(GetProcessHeap(), 0, lpMem);
+            
         }
     }
     getchar();
