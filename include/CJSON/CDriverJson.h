@@ -8,7 +8,6 @@ typedef struct _cDriverJSON {
     cJSON* parent;
 
     // 方法指针
-    cJSON_bool(*addobj)(struct cDriverJSON*, const char*, struct cDriverJSON*);
     cJSON_bool(*setstring)(struct cDriverJSON*, const char*);
     cJSON_bool(*setwstring)(struct cDriverJSON*, const wchar_t*);
     cJSON_bool(*setint)(struct cDriverJSON*, const int);
@@ -21,7 +20,6 @@ typedef struct _cDriverJSON {
 // 初始化 cJSONHandler
 cJSON_bool InitDriverJSON(cDriverJSON** json, cJSON* obj, cJSON* parent);
 
-cJSON_bool addobj(cDriverJSON* par_json, const char* key, cDriverJSON* chd_json);
 cJSON_bool setstring(cDriverJSON* json, const char* value);
 cJSON_bool setwstring(cDriverJSON* json, const wchar_t* value);
 cJSON_bool setint(cDriverJSON* json, const int value);
