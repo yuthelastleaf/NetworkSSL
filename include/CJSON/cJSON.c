@@ -318,6 +318,12 @@ CJSON_PUBLIC(void) cJSON_Delete(cJSON *item)
             global_hooks.deallocate(item->string);
             item->string = NULL;
         }
+
+        if (item->reference) {
+            global_hooks.deallocate(item->reference);
+            item->reference = NULL;
+        }
+
         global_hooks.deallocate(item);
         item = next;
     }
@@ -3442,4 +3448,21 @@ CJSON_PUBLIC(cJSON_bool) cJSON_UpdateType(cJSON* const item, int type)
     }
 
     return flag;
+}
+
+CJSON_PUBLIC(cJSON_bool) cJSON_SetRef(cJSON* const item, void* ref) {
+    cJSON_bool flag = cJSON_False;
+    if (!item->reference) {
+        item->reference = ref;
+        flag = cJSON_True;
+    }
+    return flag;
+}
+
+CJSON_PUBLIC(cJSON_bool) cJSON_GetRef(cJSON* const item) {
+    void* ref_value = NULL;
+    if (item) {
+        ref_value = item->reference;
+    }
+    return ref_value;
 }

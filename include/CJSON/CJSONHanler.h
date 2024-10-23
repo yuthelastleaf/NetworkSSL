@@ -2,18 +2,16 @@
 
 #include "cJSON.h"
 
-
+typedef struct _cJSONHanlerObj {
+    cJSON* json_obj;
+    cJSON* parent;
+} cJSONHanlerObj;
 
 #ifdef __cplusplus
 // C++ 编译
 #include "../StringHandler/StringHandler.h"
 
 #include <memory>
-
-typedef struct cJSONHanlerObj {
-    cJSON* json_obj;
-    cJSON* parent;
-} cJSONHanlerObj;
 
 class CJSONHandler
 {
@@ -120,6 +118,59 @@ public:
         }
         return *this;
     }
+
+    const char* GetString() const {
+        char* res = nullptr;
+        do {
+            if (!m_object.json_obj) {
+                break;
+            }
+
+            if (cJSON_IsString(m_object.json_obj)) {
+                res = m_object.json_obj->valuestring;
+            }
+        } while (0);
+
+        return res;
+    }
+
+    std::unique_ptr<wchar_t> GetWString() const {
+        std::unique_ptr<wchar_t> res(nullptr);
+        do {
+            if (!m_object.json_obj) {
+                break;
+            }
+
+            if (!cJSON_IsString(m_object.json_obj)) {
+                break;
+            }
+
+            wchar_t* obj_str = nullptr;
+            if (!CStringHandler::Ansi2WChar(m_object.json_obj->valuestring, obj_str)) {
+                break;
+            }
+
+            res.reset(obj_str);
+        } while (0);
+
+        return std::move(res);  // 如果没有找到字符串或类型不匹配
+    }
+
+    const int GetInt() const {
+        int res = 0;
+        do {
+            if (!m_object.json_obj) {
+                break;
+            }
+
+            if (cJSON_IsNumber(m_object.json_obj)) {
+                res = m_object.json_obj->valueint;
+            }
+        } while (0);
+
+        return res;
+    }
+
 
 // 定义一些外面需要用到的方法
 private:

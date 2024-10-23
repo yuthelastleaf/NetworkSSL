@@ -122,6 +122,9 @@ typedef struct cJSON
 
     /* The item's name string, if this item is the child of, or is in the list of subitems of an object. */
     char *string;
+
+    /*external information, use in driver mode.*/
+    void* reference;
 } cJSON;
 
 typedef struct cJSON_Hooks
@@ -329,6 +332,10 @@ CJSON_PUBLIC(void) cJSON_free(void *object);
 
 /*update cjson lib to support update cjson struct*/
 CJSON_PUBLIC(cJSON_bool) cJSON_UpdateType(cJSON* const item, int type);
+
+/*custom cJson information*/
+CJSON_PUBLIC(cJSON_bool) cJSON_SetRef(cJSON* const item, void* ref);
+CJSON_PUBLIC(cJSON_bool) cJSON_GetRef(cJSON* const item);
 
 
 #ifdef __cplusplus

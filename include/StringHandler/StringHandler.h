@@ -83,6 +83,10 @@ namespace CStringHandler {
 		if (len > 0) {
 			flag = true;
 		}
+		else {
+			delete[] pszDst;
+			pszDst = nullptr;
+		}
 		return flag;
 	}
 
@@ -98,6 +102,10 @@ namespace CStringHandler {
 
 		if (len > 0) {
 			flag = true;
+		}
+		else {
+			delete[] pwszDst;
+			pwszDst = nullptr;
 		}
 		return flag;
 	}
