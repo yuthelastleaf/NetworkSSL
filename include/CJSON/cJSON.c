@@ -3459,7 +3459,7 @@ CJSON_PUBLIC(cJSON_bool) cJSON_SetRef(cJSON* const item, void* ref) {
     return flag;
 }
 
-CJSON_PUBLIC(cJSON_bool) cJSON_GetRef(cJSON* const item) {
+CJSON_PUBLIC(void *) cJSON_GetRef(cJSON* const item) {
     void* ref_value = NULL;
     if (item) {
         ref_value = item->reference;

@@ -8,13 +8,13 @@ typedef struct _cDriverJSON {
     cJSON* parent;
 
     // 方法指针
-    cJSON_bool(*setstring)(struct cDriverJSON*, const char*);
-    cJSON_bool(*setwstring)(struct cDriverJSON*, const wchar_t*);
-    cJSON_bool(*setint)(struct cDriverJSON*, const int);
-    char* (*getstring)(struct cDriverJSON*);
-    int (*getint)(struct cDriverJSON*);
-    struct cDriverJSON*(*get)(struct cDriverJSON*, const char*);
-    char* (*getjsonstring)(struct cDriverJSON*);
+    cJSON_bool(*setstring)(struct _cDriverJSON*, const char*);
+    cJSON_bool(*setwstring)(struct _cDriverJSON*, const wchar_t*);
+    cJSON_bool(*setint)(struct _cDriverJSON*, const int);
+    char* (*getstring)(struct _cDriverJSON*);
+    int (*getint)(struct _cDriverJSON*);
+    struct cDriverJSON*(*get)(struct _cDriverJSON*, const char*);
+    char* (*getjsonstring)(struct _cDriverJSON*);
 } cDriverJSON;
 
 // 初始化 cJSONHandler

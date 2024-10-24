@@ -335,7 +335,7 @@ CJSON_PUBLIC(cJSON_bool) cJSON_UpdateType(cJSON* const item, int type);
 
 /*custom cJson information*/
 CJSON_PUBLIC(cJSON_bool) cJSON_SetRef(cJSON* const item, void* ref);
-CJSON_PUBLIC(cJSON_bool) cJSON_GetRef(cJSON* const item);
+CJSON_PUBLIC(void *) cJSON_GetRef(cJSON* const item);
 
 
 #ifdef __cplusplus
