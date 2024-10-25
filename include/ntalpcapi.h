@@ -1298,10 +1298,9 @@ typedef VOID(*RtlInitUnicodeString_FuncType)(
 #endif
 
 // end_private
+#define MAX_MSG_LEN 0x500
 
 #ifdef _KERNEL_MODE
-
-#define MAX_MSG_LEN 0x500
 
 #ifndef ALPCTAG
 #define ALPCTAG 'cpla'

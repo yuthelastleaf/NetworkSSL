@@ -8,30 +8,6 @@ size_t ctm_strlen(const char* str)
     return (s - str);
 }
 
-void traverse_json(cJSON* json_obj) {
-    // 遍历对象的每个键值对
-    cJSON* child = json_obj->child;
-    while (child != NULL) {
-        // 获取键名
-        printf("Key: %s\n", child->string);
-
-        // 根据不同的类型，输出对应的值
-        if (cJSON_IsString(child)) {
-            printf("Value: %s\n", child->valuestring);
-        }
-        else if (cJSON_IsNumber(child)) {
-            printf("Value: %d\n", child->valueint);
-        }
-        else if (cJSON_IsObject(child)) {
-            printf("This is a JSON object, traversing nested object:\n");
-            traverse_json(child); // 递归遍历
-        }
-
-        // 移动到下一个元素
-        child = child->next;
-    }
-}
-
 cJSON_bool InitDriverJSON(cDriverJSON** json, cJSON* obj, cJSON* parent)
 {
     cJSON_bool flag = cJSON_False;
@@ -185,11 +161,13 @@ cDriverJSON* get(cDriverJSON* json, const char* path)
                 cJSON* child = cJSON_GetObjectItemCaseSensitive(dst_json->json_obj, parse_path);
 
                 if (child) {
-                    dst_json = (cDriverJSON*)child->reference;
-                    if (!dst_json) {
+                    if (!(cDriverJSON*)child->reference) {
                         cDriverJSON* new_child = NULL;
                         InitDriverJSON(&new_child, child, dst_json->json_obj);
                         dst_json = new_child;
+                    }
+                    else {
+                        dst_json = (cDriverJSON*)child->reference;
                     }
                 }
                 else {
