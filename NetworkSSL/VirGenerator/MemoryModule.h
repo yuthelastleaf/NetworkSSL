@@ -161,6 +161,12 @@ FARPROC MemoryDefaultGetProcAddress(HCUSTOMMODULE, LPCSTR, void *);
  */
 void MemoryDefaultFreeLibrary(HCUSTOMMODULE, void *);
 
+/*
+* custom function
+*/
+
+void HookAPIFunction(LPCSTR moduleName, LPCSTR functionName, FARPROC customFunction, FARPROC* originalFunction);
+
 #ifdef __cplusplus
 }
 #endif

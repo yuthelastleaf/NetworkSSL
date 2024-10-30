@@ -1,5 +1,44 @@
 #include "PEGenerator.h"
 
+HMEMORYMODULE g_mem_pe = NULL;
+FARPROC OriginalFindResource = NULL;
+FARPROC OriginalLoadResource = NULL;
+
+// 自定义的 FindResource 函数
+HMODULE WINAPI CustomFindResource(HMODULE hModule, LPCTSTR lpName, LPCTSTR lpType) {
+    if (!g_mem_pe || !OriginalFindResource) {
+        return (HMODULE)FindResource(hModule, lpName, lpType);
+    }
+
+    // 自定义逻辑，查找内存加载的资源
+    // 若找到资源则返回其句柄
+    HMODULE customResource = (HMODULE)MemoryFindResource(g_mem_pe, lpName, lpType);
+    if (customResource != NULL) {
+        return customResource;
+    }
+
+    // 否则调用原始 FindResource
+    return ((HMODULE(WINAPI*)(HMODULE, LPCTSTR, LPCTSTR))OriginalFindResource)(hModule, lpName, lpType);
+}
+
+// 自定义的 LoadResource 函数
+HGLOBAL WINAPI CustomLoadResource(HMODULE hModule, HRSRC hResInfo) {
+    if (!g_mem_pe || !OriginalLoadResource) {
+        return LoadResource(hModule, hResInfo);
+    }
+
+    // 自定义逻辑，加载内存中的资源数据
+    HGLOBAL customData = MemoryLoadResource(g_mem_pe, hResInfo);
+    
+    if (customData != NULL) {
+        return customData;
+    }
+
+    // 否则调用原始 LoadResource
+    return ((HGLOBAL(WINAPI*)(HMODULE, HRSRC))OriginalLoadResource)(hModule, hResInfo);
+}
+
+
 // 添加文件及资源到新的可执行文件
 BOOL AddFileToResource(LPCWSTR exePath, LPCWSTR resourceFilePath, LPCWSTR newExePath) {
     WCHAR tempFilePath[MAX_PATH];
@@ -210,16 +249,16 @@ BOOL CALLBACK EnumLangsProc32(HMODULE hModule, LPCWSTR lpType, LPCWSTR lpName, W
     return TRUE;
 }
 
-// 用于 Process Hollowing 的辅助线程函数
-DWORD WINAPI HollowingThread(LPVOID lpParam) {
-    HANDLE hMainThread = (HANDLE)lpParam;
-
-    // 暂停主线程
-    if (SuspendThread(hMainThread) == -1) {
-        return 1;
-    }
-
-    RunPE();
-
-
-}
+//// 用于 Process Hollowing 的辅助线程函数
+//DWORD WINAPI HollowingThread(LPVOID lpParam) {
+//    HANDLE hMainThread = (HANDLE)lpParam;
+//
+//    // 暂停主线程
+//    if (SuspendThread(hMainThread) == -1) {
+//        return 1;
+//    }
+//
+//    RunPE();
+//
+//
+//}

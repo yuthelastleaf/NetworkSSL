@@ -30,9 +30,6 @@
     <ClInclude Include="MemoryModule.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="ProcessHollowing.h">
-      <Filter>ProcHollowing</Filter>
-    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Generator.rc">
@@ -53,9 +50,6 @@
     </ClCompile>
     <ClCompile Include="PEGenerator.cpp">
       <Filter>Generator</Filter>
-    </ClCompile>
-    <ClCompile Include="ProcessHollowing.cpp">
-      <Filter>ProcHollowing</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

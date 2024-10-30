@@ -21,7 +21,6 @@
   <ItemGroup>
     <ClInclude Include="MemoryModule.h" />
     <ClInclude Include="PEGenerator.h" />
-    <ClInclude Include="ProcessHollowing.h" />
     <ClInclude Include="resource.h" />
   </ItemGroup>
   <ItemGroup>
@@ -34,7 +33,6 @@
     <ClCompile Include="main.cpp" />
     <ClCompile Include="MemoryModule.c" />
     <ClCompile Include="PEGenerator.cpp" />
-    <ClCompile Include="ProcessHollowing.cpp" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>
