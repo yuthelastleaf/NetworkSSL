@@ -2,7 +2,7 @@
 // Microsoft Visual C++ 生成的包含文件。
 // 供 Generator.rc 使用
 //
-#define IDR_BINARY_FILE                 102
+#define IDR_BINARY_FILE                 65535
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED

