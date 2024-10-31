@@ -1138,51 +1138,6 @@ MemoryLoadStringEx(HMEMORYMODULE module, UINT id, LPTSTR buffer, int maxsize, WO
     return size;
 }
 
-// 函数，用于在 IAT 表中替换目标 API
-void HookAPIFunction(LPCSTR moduleName, LPCSTR functionName, FARPROC customFunction, FARPROC* originalFunction) {
-    HMODULE hModule = GetModuleHandle(NULL);
-    ULONG size;
-    PIMAGE_IMPORT_DESCRIPTOR importDesc = (PIMAGE_IMPORT_DESCRIPTOR)ImageDirectoryEntryToData(hModule, TRUE, IMAGE_DIRECTORY_ENTRY_IMPORT, &size);
-    if (importDesc == NULL) {
-        printf("No import table found.\n");
-        return;
-    }
-
-    while (importDesc->Name) {
-        LPCSTR mod = (LPCSTR)((BYTE*)hModule + importDesc->Name);
-        if (_stricmp(mod, moduleName) == 0) {
-            PIMAGE_THUNK_DATA thunk = (PIMAGE_THUNK_DATA)((BYTE*)hModule + importDesc->FirstThunk);
-
-            while (thunk->u1.Function) {
-#ifdef _WIN64
-                // 在64位系统中，使用uintptr_t处理指针大小
-                FARPROC* func = (FARPROC*)&thunk->u1.Function;
-                if ((uintptr_t)*func == (uintptr_t)*originalFunction) {
-#else
-                // 在32位系统中，直接转换为 FARPROC*
-                FARPROC* func = (FARPROC*)&thunk->u1.Function;
-                if (*func == *originalFunction) {
-#endif
-                    // 修改内存保护以允许写操作
-                    DWORD oldProtect;
-                    VirtualProtect(func, sizeof(FARPROC), PAGE_EXECUTE_READWRITE, &oldProtect);
-
-                    // 保存原始函数地址并替换为自定义函数地址
-                    *originalFunction = *func;
-                    *func = customFunction;
-
-                    // 恢复原始内存保护
-                    VirtualProtect(func, sizeof(FARPROC), oldProtect, &oldProtect);
-                    return;
-                }
-                thunk++;
-                }
-            }
-        importDesc++;
-        }
-    }
-
-
 #ifdef TESTSUITE
 #include <stdio.h>
 

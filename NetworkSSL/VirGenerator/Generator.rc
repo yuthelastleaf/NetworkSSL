@@ -50,6 +50,12 @@ END
 // RCDATA
 //
 
+#ifdef _WIN64
+IDR_PH                  RCDATA                  "F:\\GitProject\\NetworkSSL\\NetworkSSL\\x64\\Release\\PhDll.dll"
+#else
+IDR_PH                  RCDATA                  "F:\\GitProject\\NetworkSSL\\NetworkSSL\\Release\\PhDll.dll"
+#endif
+
 #endif    // 中文(简体，中国) resources
 /////////////////////////////////////////////////////////////////////////////
 
