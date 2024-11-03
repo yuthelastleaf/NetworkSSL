@@ -49,6 +49,9 @@ BOOL RunPEReloc32(const LPPROCESS_INFORMATION lpPI, const LPVOID lpImage);
 BOOL RunPEReloc64(const LPPROCESS_INFORMATION lpPI, const LPVOID lpImage);
 #endif
 __declspec(dllexport) int RunPE(int resourceId);
+
+typedef NTSTATUS(WINAPI* pfnZwUnmapViewOfSection)(HANDLE ProcessHandle, PVOID BaseAddress);
+
 #ifdef __cplusplus
 }
 #endif
