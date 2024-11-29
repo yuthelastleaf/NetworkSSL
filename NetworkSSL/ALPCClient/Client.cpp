@@ -17,6 +17,11 @@ LPVOID CreateMsgMem(PPORT_MESSAGE PortMessage, SIZE_T MessageSize, LPVOID Messag
     return(lpMem);
 }
 
+LPVOID AllocMsgMem(SIZE_T Size)
+{
+    return (HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, Size + sizeof(PORT_MESSAGE)));
+}
+
 void main()
 {
     MessageBox(NULL, L"test", L"test", MB_OK);
@@ -44,7 +49,7 @@ void main()
     pmSend.u1.s1.DataLength = MSG_LEN;
     pmSend.u1.s1.TotalLength = pmSend.u1.s1.DataLength + sizeof(pmSend);
     lpMem = CreateMsgMem(&pmSend, MSG_LEN, (LPVOID)L"Hello World!");
-    ntRet = pfunc_NtAlpcConnectPort(&hPort, &usPort, NULL, NULL, 0, NULL, NULL, NULL, NULL, NULL, NULL);
+    ntRet = pfunc_NtAlpcConnectPort(&hPort, &usPort, NULL, NULL, ALPC_MSGFLG_SYNC_REQUEST, NULL, NULL, NULL, NULL, NULL, NULL);
 
     printf("[i] NtAlpcConnectPort: 0x%X\n", ntRet);
     if (!ntRet)
@@ -77,12 +82,25 @@ void main()
                 pmSend.u1.s1.TotalLength = pmSend.u1.s1.DataLength + sizeof(PORT_MESSAGE);
                 lpMem = CreateMsgMem(&pmSend, pmSend.u1.s1.DataLength, json_string.get());
 
-                ntRet = pfunc_NtAlpcSendWaitReceivePort(hPort, 0, (PPORT_MESSAGE)lpMem, NULL, NULL, NULL, NULL, NULL);
+                /*LPVOID recv_mem = NULL;
+                SIZE_T msg_size = MAX_MSG_LEN + sizeof(PORT_MESSAGE);
+                recv_mem = AllocMsgMem(MAX_MSG_LEN);*/
+                PORT_MESSAGE receiveMessage;
+                SIZE_T receiveMessageLength;
 
+
+                ntRet = pfunc_NtAlpcSendWaitReceivePort(hPort, 0, (PPORT_MESSAGE)lpMem, NULL, (PPORT_MESSAGE)&receiveMessage, &receiveMessageLength, NULL, NULL);
+
+                printf("[i] server Data: ");
+
+                char* recv_data = ((char*)&receiveMessage + sizeof(PORT_MESSAGE));
+                printf("%s\n", recv_data);
+                
                 HeapFree(GetProcessHeap(), 0, lpMem);
+                // HeapFree(GetProcessHeap(), 0, recv_mem);
             }
 
-            if (szInput) {
+            /*if (szInput) {
                 RtlSecureZeroMemory(&pmSend, sizeof(pmSend));
                 pmSend.u1.s1.DataLength = strlen(szInput);
                 pmSend.u1.s1.TotalLength = pmSend.u1.s1.DataLength + sizeof(PORT_MESSAGE);
@@ -91,7 +109,7 @@ void main()
                 ntRet = pfunc_NtAlpcSendWaitReceivePort(hPort, 0, (PPORT_MESSAGE)lpMem, NULL, NULL, NULL, NULL, NULL);
 
                 HeapFree(GetProcessHeap(), 0, lpMem);
-            }
+            }*/
 
             printf("[i] NtAlpcSendWaitReceivePort: 0x%X\n", ntRet);
             

@@ -3,7 +3,18 @@
 #include <stdio.h>
 #include "../../include/ntalpcapi.h"
 
-#define MAX_MSG_LEN 0x500
+#include "../../include/CJSON/CJSONHanler.h"
+
+LPVOID CreateMsgMem(PPORT_MESSAGE PortMessage, SIZE_T MessageSize, LPVOID Message)
+{
+    /*
+        It's important to understand that after the PORT_MESSAGE struct is the message data
+    */
+    LPVOID lpMem = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, MessageSize + sizeof(PORT_MESSAGE));
+    memmove(lpMem, PortMessage, sizeof(PORT_MESSAGE));
+    memmove((BYTE*)lpMem + sizeof(PORT_MESSAGE), Message, MessageSize);
+    return(lpMem);
+}
 
 LPVOID AllocMsgMem(SIZE_T Size)
 {
@@ -13,7 +24,7 @@ LPVOID AllocMsgMem(SIZE_T Size)
     return(HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, Size + sizeof(PORT_MESSAGE)));
 }
 
-void CreatePortAndListen(LPCWSTR PortName)
+DWORD CreatePortAndListen(LPVOID PortName)
 {
     ALPC_PORT_ATTRIBUTES    serverPortAttr;
     OBJECT_ATTRIBUTES       objPort;
@@ -37,7 +48,7 @@ void CreatePortAndListen(LPCWSTR PortName)
     DEFAPI(NtAlpcDisconnectPort);
 
 	
-    pfunc_RtlInitUnicodeString(&usPortName, PortName);
+    pfunc_RtlInitUnicodeString(&usPortName, (LPCWSTR)PortName);
     InitializeObjectAttributes(&objPort, &usPortName, 0, 0, 0);
     RtlSecureZeroMemory(&serverPortAttr, sizeof(serverPortAttr));
     serverPortAttr.MaxMessageLength = MAX_MSG_LEN; // For ALPC this can be max of 64KB
@@ -92,7 +103,7 @@ void CreatePortAndListen(LPCWSTR PortName)
                     }
 
                     pmReceive = *(PORT_MESSAGE*)lpMem;
-                    if (!strcmp((BYTE*)lpMem + sizeof(PORT_MESSAGE), "exit\n"))
+                    if (!strcmp((char*)lpMem + sizeof(PORT_MESSAGE), "exit\n"))
                     {
                         printf("[i] Received 'exit' command\n");
                         HeapFree(GetProcessHeap(), 0, lpMem);
@@ -110,15 +121,38 @@ void CreatePortAndListen(LPCWSTR PortName)
                             bTemp = *(BYTE*)((BYTE*)lpMem + i + sizeof(PORT_MESSAGE));
                             printf("0x%X ", bTemp);
                         }*/
-                        char* data = ((BYTE*)lpMem + sizeof(PORT_MESSAGE));
+
+                        char* data = ((char*)lpMem + sizeof(PORT_MESSAGE));
                         printf("%s\n", data);
+
+                        if (strlen(data) <= 0) {
+                            HeapFree(GetProcessHeap(), 0, lpMem);
+                            continue;
+                        }
+
+                        
+                        CJSONHandler json(cJSON_Parse(data), nullptr);
+                        json[L"name"][L"result"] = "mytest";
+                        std::shared_ptr<char> pdata = json.GetJsonString();
+
+                        PORT_MESSAGE    pmSend;
+                        RtlSecureZeroMemory(&pmSend, sizeof(pmSend));
+                        pmSend.u1.s1.DataLength = strlen(pdata.get());
+                        pmSend.u1.s1.TotalLength = pmSend.u1.s1.DataLength + sizeof(PORT_MESSAGE);
+                        LPVOID precv = CreateMsgMem(&pmSend, pmSend.u1.s1.DataLength, pdata.get());
+
+                        ntRet = pfunc_NtAlpcSendWaitReceivePort(hConnectedPort, 0, (PPORT_MESSAGE)precv, NULL, NULL, NULL, NULL, &timeout);
+                        
+
                         HeapFree(GetProcessHeap(), 0, lpMem);
+                        HeapFree(GetProcessHeap(), 0, precv);
                     }
                 }
             }
         }
     }
     ExitThread(0);
+    return 0;
 }
 
 void main()
@@ -126,7 +160,8 @@ void main()
     HANDLE hThread;
 
     printf("[i] ALPC-Example Server\n");
-    hThread = CreateThread(NULL, 0, &CreatePortAndListen, L"\\RPC Control\\NameOfPort", 0, NULL);
+    LPCWSTR port_name = L"\\RPC Control\\NameOfPort";
+    hThread = CreateThread(NULL, 0, &CreatePortAndListen, (LPVOID)port_name, 0, NULL);
     WaitForSingleObject(hThread, INFINITE);
     printf("[!] Shuting down server\n");
     getchar();
