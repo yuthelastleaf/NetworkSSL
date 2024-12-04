@@ -27,6 +27,11 @@ public:
     {
 	}
 
+    CJSONHandler(char* json_str)
+        : m_object({ cJSON_Parse(json_str), nullptr })
+    {
+    }
+
 	~CJSONHandler() {
         if (!m_object.parent) {
             cJSON_Delete(m_object.json_obj);
@@ -114,6 +119,16 @@ public:
         if (cJSON_UpdateType(m_object.json_obj, cJSON_String)) {
             if (cJSON_UpdateType(m_object.parent, cJSON_Object)) {
                 cJSON_SetValuestring(m_object.json_obj, value);
+            }
+        }
+        return *this;
+    }
+
+    // ∏≥÷µ‘ÀÀ„∑˚÷ÿ‘ÿ
+    CJSONHandler& operator=(int value) {
+        if (cJSON_UpdateType(m_object.json_obj, cJSON_Number)) {
+            if (cJSON_UpdateType(m_object.parent, cJSON_Object)) {
+                cJSON_SetNumberValue(m_object.json_obj, value);
             }
         }
         return *this;

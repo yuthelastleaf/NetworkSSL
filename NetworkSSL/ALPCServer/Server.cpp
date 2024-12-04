@@ -5,6 +5,8 @@
 
 #include "../../include/CJSON/CJSONHanler.h"
 
+#include "../../include/Alpc/alpc_util.h"
+
 LPVOID CreateMsgMem(PPORT_MESSAGE PortMessage, SIZE_T MessageSize, LPVOID Message)
 {
     /*
@@ -57,7 +59,8 @@ DWORD CreatePortAndListen(LPVOID PortName)
     printf("[i] NtAlpcCreatePort: 0x%X\n", ntRet);
     if (!ntRet)
     {
-        nLen = sizeof(pmReceive);
+        // nLen = sizeof(pmReceive);
+        nLen = MAX_MSG_LEN;
         ntRet = pfunc_NtAlpcSendWaitReceivePort(hPort, 0, NULL, NULL, &pmReceive, &nLen, NULL, NULL);
         if (!ntRet)
         {
@@ -161,9 +164,13 @@ void main()
 
     printf("[i] ALPC-Example Server\n");
     LPCWSTR port_name = L"\\RPC Control\\NameOfPort";
-    hThread = CreateThread(NULL, 0, &CreatePortAndListen, (LPVOID)port_name, 0, NULL);
-    WaitForSingleObject(hThread, INFINITE);
-    printf("[!] Shuting down server\n");
+    /*hThread = CreateThread(NULL, 0, &CreatePortAndListen, (LPVOID)port_name, 0, NULL);
+    WaitForSingleObject(hThread, INFINITE);*/
+
+    AlpcConn alpc;
+    alpc.create_server(L"\\RPC Control\\YJN");
+
+    // printf("[!] Shuting down server\n");
     getchar();
     return;
 }

@@ -1287,9 +1287,75 @@ typedef PALPC_MESSAGE_ATTRIBUTES(*AlpcGetCompletionListMessageAttributes_FuncTyp
 	);
 
 // 以下为应用层使用
+NTSYSAPI
+PVOID
+NTAPI
+RtlAllocateHeap(
+	_In_ PVOID HeapHandle,
+	_In_opt_ ULONG Flags,
+	_In_ SIZE_T Size
+);
+
+NTSYSAPI
+BOOLEAN
+NTAPI
+RtlFreeHeap(
+	_In_ PVOID HeapHandle,
+	_In_opt_ ULONG Flags,
+	_In_ PVOID BaseAddress
+);
+
+typedef PVOID(NTAPI* RtlAllocateHeap_FuncType)(
+	_In_ PVOID HeapHandle,
+	_In_opt_ ULONG Flags,
+	_In_ SIZE_T Size
+	);
+
+typedef BOOLEAN(NTAPI* RtlFreeHeap_FuncType)(
+	_In_ PVOID HeapHandle,
+	_In_opt_ ULONG Flags,
+	_In_ PVOID BaseAddress
+	);
+
+typedef BOOLEAN(NTAPI* RtlCreateUnicodeString_FuncType)(
+	PUNICODE_STRING DestinationString,
+	PCWSTR SourceString
+	);
+
+typedef VOID(NTAPI* RtlFreeUnicodeString_FuncType)(
+	PUNICODE_STRING UnicodeString
+	);
+
+
 typedef VOID(*RtlInitUnicodeString_FuncType)(
 	PUNICODE_STRING DestinationString,
 	PCWSTR SourceString
+	);
+
+typedef VOID (*RtlCopyUnicodeString_FuncType)(
+	_Out_ PUNICODE_STRING DestinationString,
+	_In_opt_ PCUNICODE_STRING SourceString
+);
+
+typedef NTSTATUS(NTAPI* NtQueryInformationProcess_FuncType)(
+	_In_ HANDLE ProcessHandle,
+	_In_ int ProcessInformationClass,
+	// _In_ PROCESSINFOCLASS ProcessInformationClass,
+	_Out_writes_bytes_(ProcessInformationLength) PVOID ProcessInformation,
+	_In_ ULONG ProcessInformationLength,
+	_Out_opt_ PULONG ReturnLength
+	);
+
+typedef NTSTATUS(NTAPI* NtReadVirtualMemory_FuncType)(
+	HANDLE ProcessHandle,
+	PVOID BaseAddress,
+	PVOID Buffer,
+	SIZE_T BufferSize,
+	PSIZE_T NumberOfBytesRead
+	);
+
+typedef NTSTATUS(NTAPI* RtlGetVersion_FuncType)(
+	PRTL_OSVERSIONINFOW lpVersionInformation
 	);
 
 

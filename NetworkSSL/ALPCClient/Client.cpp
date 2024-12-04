@@ -4,6 +4,8 @@
 #include "../../include/ntalpcapi.h"
 #include "../../include/CJSON/CJSONHanler.h"
 
+#include "../../include/Alpc/alpc_util.h"
+
 #define MSG_LEN 0x100
 
 LPVOID CreateMsgMem(PPORT_MESSAGE PortMessage, SIZE_T MessageSize, LPVOID Message)
@@ -22,7 +24,7 @@ LPVOID AllocMsgMem(SIZE_T Size)
     return (HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, Size + sizeof(PORT_MESSAGE)));
 }
 
-void main()
+void main_old()
 {
     MessageBox(NULL, L"test", L"test", MB_OK);
 
@@ -44,7 +46,7 @@ void main()
 
 
     printf("ALPC-Example Client\n");
-    pfunc_RtlInitUnicodeString(&usPort, L"\\RPC Control\\NameOfPort");
+    pfunc_RtlInitUnicodeString(&usPort, L"\\RPC Control\\YJN");
     RtlSecureZeroMemory(&pmSend, sizeof(pmSend));
     pmSend.u1.s1.DataLength = MSG_LEN;
     pmSend.u1.s1.TotalLength = pmSend.u1.s1.DataLength + sizeof(pmSend);
@@ -91,6 +93,7 @@ void main()
 
                 ntRet = pfunc_NtAlpcSendWaitReceivePort(hPort, 0, (PPORT_MESSAGE)lpMem, NULL, (PPORT_MESSAGE)&receiveMessage, &receiveMessageLength, NULL, NULL);
 
+
                 printf("[i] server Data: ");
 
                 char* recv_data = ((char*)&receiveMessage + sizeof(PORT_MESSAGE));
@@ -117,4 +120,40 @@ void main()
     }
     getchar();
     return;
+}
+
+int main() {
+
+    AlpcConn alpc;
+    alpc.connect_server(L"\\RPC Control\\YJN");
+    char            szInput[POST_LEN];
+    while (true) {
+
+        printf("[.] Enter Message > ");
+        fgets(szInput, POST_LEN, stdin);
+        RtlSecureZeroMemory(&szInput, sizeof(szInput));
+
+        CJSONHandler json;
+        json[L"reply"] = 1;
+        json[L"name"] = "test";
+        json[L"name"] = "bushiba";
+        json[L"info"] = "hhh";
+        json[L"newobj"][L"qiantao"][L"lipu"] = L"Ç¶Ì×¶ÔÏó";
+        json[L"name"][L"Ìæ»»"] = "replace";
+        std::shared_ptr<char> json_string = json.GetJsonString();
+
+        // ²éÕÒ²¢ÒÆ³ý»»ÐÐ·û '\n'
+        size_t len = strlen(szInput);
+        if (len > 0 && szInput[len - 1] == '\n') {
+            szInput[len - 1] = '\0';  // ÓÃ¿Õ×Ö·ûÌæ»» '\n'
+        }
+
+        if (json_string) {
+            alpc.send_msg(json_string.get());
+            // HeapFree(GetProcessHeap(), 0, recv_mem);
+        }
+
+    }
+
+    return 0;
 }
