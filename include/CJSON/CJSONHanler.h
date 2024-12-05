@@ -69,6 +69,20 @@ public:
         return nullptr; // 返回空指针如果对象无效
     }
 
+    // 更新当前字符串
+    bool UpdateJson(const char* json) {
+        bool flag = false;
+        
+        if (!m_object.parent) {
+            cJSON_Delete(m_object.json_obj);
+
+            m_object.json_obj = cJSON_Parse(json);
+            flag = true;
+        }
+
+        return flag;
+    }
+
 public:
     // 重载运算符[]，用于读取元素
     CJSONHandler operator[](const wchar_t* key) const {

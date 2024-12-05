@@ -5,9 +5,10 @@
 #include <winternl.h>
 
 #include <thread>
+#include <map>
+#include <string>
 
 #include "../ntalpcapi.h"
-#include "../StringHandler/StringHandler.h"
 
 #define POST_LEN 0x400
 
@@ -21,7 +22,6 @@ public:
     }
 
     ~PostMsg() {
-
         if (msg_) {
             ReleaseMsgMem(msg_);
         }
@@ -95,23 +95,34 @@ public:
 public:
 
     bool create_server(const wchar_t* port_name) {
-        DEFAPI(RtlInitUnicodeString);
-        DEFAPI(NtAlpcCreatePort);
 
-        ALPC_PORT_ATTRIBUTES    serverPortAttr;
-        UNICODE_STRING          usPortName;
-        OBJECT_ATTRIBUTES       objPort;
         bool flag = false;
-        alpc_port_ = 0;
 
-        pfunc_RtlInitUnicodeString(&usPortName, port_name);
-        InitializeObjectAttributes(&objPort, &usPortName, 0, 0, 0);
-        RtlSecureZeroMemory(&serverPortAttr, sizeof(serverPortAttr));
-        serverPortAttr.MaxMessageLength = POST_LEN; // For ALPC this can be max of 64KB
-        if (!pfunc_NtAlpcCreatePort(&alpc_port_, &objPort, &serverPortAttr)) {
-            std::thread runserver(&AlpcConn::run_server, this);
-            runserver.detach();
-            flag = true;
+        if (!alpc_port_) {
+            DEFAPI(RtlInitUnicodeString);
+            DEFAPI(NtAlpcCreatePort);
+
+            ALPC_PORT_ATTRIBUTES    serverPortAttr;
+            UNICODE_STRING          usPortName;
+            OBJECT_ATTRIBUTES       objPort;
+
+            std::wstring str_port = L"\\RPC Control\\";
+            str_port += port_name;
+
+            pfunc_RtlInitUnicodeString(&usPortName, str_port.c_str());
+            InitializeObjectAttributes(&objPort, &usPortName, 0, 0, 0);
+            RtlSecureZeroMemory(&serverPortAttr, sizeof(serverPortAttr));
+            serverPortAttr.MaxMessageLength = POST_LEN; // For ALPC this can be max of 64KB
+
+            NTSTATUS nret = pfunc_NtAlpcCreatePort(&alpc_port_, &objPort, &serverPortAttr);
+            if (!nret) {
+                std::thread runserver(&AlpcConn::run_server, this);
+                runserver.detach();
+                flag = true;
+            }
+            else {
+                alpc_port_ = 0;
+            }
         }
         return flag;
     }
@@ -140,28 +151,13 @@ public:
                     printf("[i] NtAlpcAcceptConnectPort: 0x%X\n", ntRet);
                 }
                 else {
-                    if (!strcmp((char*)recvmsg.GetDataMem(), "exit\n"))
-                    {
-                        printf("[i] Received 'exit' command\n");
-                        ntRet = pfunc_NtAlpcDisconnectPort(alpc_port_, 0);
-                        printf("[i] NtAlpcDisconnectPort: %X\n", ntRet);
-                        CloseHandle(alpc_port_);
-                        ExitThread(0);
-                    }
-                    else
-                    {
-                        printf("[i] Received Data: ");
-                        printf("%s\n", (char*)recvmsg.GetDataMem());
-                        CJSONHandler json((char*)recvmsg.GetDataMem());
-                        if (json[L"reply"].GetInt() == 1) {
-                            json[L"replymsg"] = L"servermsg";
-                            std::shared_ptr<char> repstr = json.GetJsonString();
-                            PostMsg replymsg(repstr.get(), recvmsg.port_msg_.MessageId, strlen(repstr.get()));
-                            ntRet = pfunc_NtAlpcSendWaitReceivePort(alpc_port_, 0, (PPORT_MESSAGE)replymsg.GetMsgMem(),
-                                NULL, NULL, NULL, NULL, NULL);
-
-                            printf("[i] NtAlpcSendWaitReceivePort - reply: %X\n", ntRet);
-                        }
+                    CJSONHandler json((char*)recvmsg.GetDataMem());
+                    if (json[L"reply"].GetInt() == 1) {
+                        json[L"replymsg"] = L"server_reply_msg";
+                        std::shared_ptr<char> repstr = json.GetJsonString();
+                        PostMsg replymsg(repstr.get(), recvmsg.port_msg_.MessageId, strlen(repstr.get()));
+                        ntRet = pfunc_NtAlpcSendWaitReceivePort(alpc_port_, 0, (PPORT_MESSAGE)replymsg.GetMsgMem(),
+                            NULL, NULL, NULL, NULL, NULL);
                     }
                 }
             }
@@ -181,7 +177,9 @@ public:
         NTSTATUS        ntRet;
         bool flag = false;
 
-        pfunc_RtlInitUnicodeString(&usPort, port_name);
+        std::wstring str_port = L"\\RPC Control\\";
+        str_port += port_name;
+        pfunc_RtlInitUnicodeString(&usPort, str_port.c_str());
         ntRet = pfunc_NtAlpcConnectPort(&alpc_port_, &usPort, NULL, NULL,
             ALPC_MSGFLG_SYNC_REQUEST, NULL, NULL, NULL, NULL, NULL, NULL);
 
@@ -191,63 +189,29 @@ public:
         return flag;
     }
 
-    bool post_msg(const char* msg) {
+    bool post_msg(CJSONHandler& json, ULONG msgid = 0) {
         bool flag = false;
-
-        PostMsg sendmsg(msg, 0, strlen(msg));
-        PostMsg recvmsg(nullptr);
-        SIZE_T recv_len = POST_LEN;
-
+        std::shared_ptr<char> msg = json.GetJsonString();
+        PostMsg sendmsg(msg.get(), msgid, strlen(msg.get()));
         NTSTATUS ntRet = sendrecv(alpc_port_, 0, (PPORT_MESSAGE)sendmsg.GetMsgMem(), NULL,
             NULL, NULL, NULL, NULL);
-
         if (NT_SUCCESS(ntRet)) {
-            printf("[i] server Data: ");
-            printf("%s\n", (char*)recvmsg.GetDataMem());
             flag = true;
         }
-
         return flag;
     }
 
-    bool send_msg(const char* msg) {
+    bool send_msg(CJSONHandler& json, ULONG msgid = 0) {
         bool flag = false;
-
-        PostMsg sendmsg(msg, 0, strlen(msg));
+        std::shared_ptr<char> msg = json.GetJsonString();
+        PostMsg sendmsg(msg.get(), msgid, strlen(msg.get()));
         PostMsg recvmsg(nullptr);
         SIZE_T recv_len = POST_LEN;
-
         NTSTATUS ntRet = sendrecv(alpc_port_, ALPC_MSGFLG_SYNC_REQUEST, (PPORT_MESSAGE)sendmsg.GetMsgMem(), NULL,
             (PPORT_MESSAGE)recvmsg.GetMsgMem(), &recv_len, NULL, NULL);
-
         if (NT_SUCCESS(ntRet)) {
             recvmsg.update_msg();
-            printf("[i] server Data: ");
-            printf("%s\n", (char*)recvmsg.GetDataMem());
-            flag = true;
-        }
-
-        return flag;
-    }
-
-    bool post_msg(const wchar_t* msg) {
-        bool flag = false;
-        char* amsg = nullptr;
-        if (CStringHandler::WChar2Ansi(msg, amsg)) {
-            post_msg(amsg);
-            delete[] amsg;
-            flag = true;
-        }
-        return flag;
-    }
-
-
-    bool send_msg(const wchar_t* msg) {
-        bool flag = false;
-        char* amsg = nullptr;
-        if (CStringHandler::WChar2Ansi(msg, amsg)) {
-            send_msg(amsg);
-            delete[] amsg;
+            json.UpdateJson((char*)recvmsg.GetDataMem());
             flag = true;
         }
         return flag;
@@ -262,33 +226,60 @@ private:
 
 
 // 来个单例主要维护发送消息的连接
-class Singleton {
+class AlpcMng {
 public:
     // 禁止拷贝和赋值
-    Singleton(const Singleton&) = delete;
-    Singleton& operator=(const Singleton&) = delete;
+    AlpcMng(const AlpcMng&) = delete;
+    AlpcMng& operator=(const AlpcMng&) = delete;
 
     // 获取单例实例
-    static Singleton& getInstance() {
-        static Singleton instance;
+    static AlpcMng& getInstance() {
+        static AlpcMng instance;
         return instance;
     }
 
     // 示例方法
-    void doSomething() {
-        std::cout << "Singleton instance is working!" << std::endl;
+    bool run_server(const wchar_t* port_name) {
+        return alpc_server_.create_server(port_name);
+    }
+
+    bool notify_msg(const wchar_t* port_name, CJSONHandler& json, bool post = true) {
+        bool flag = false;
+        if (alpc_client_.find(port_name) == alpc_client_.end()) {
+            AlpcConn new_client;
+            new_client.connect_server(port_name);
+            alpc_client_[port_name] = new_client;
+        }
+
+        if (!post) {
+            json[L"reply"] = 1;
+            flag = alpc_client_[port_name].send_msg(json);
+        }
+        else {
+            flag = alpc_client_[port_name].post_msg(json);
+        }
+
+        if (!flag) {
+            alpc_client_.erase(port_name);
+        }
+
+        return flag;
     }
 
 private:
     // 私有构造函数
-    Singleton() {
-        std::cout << "Singleton constructor called!" << std::endl;
+    AlpcMng() {
+        CStringHandler::InitChinese();
     }
 
     // 私有析构函数（通常不需要，但可以加以防止意外销毁）
-    ~Singleton() {
-        std::cout << "Singleton destructor called!" << std::endl;
+    ~AlpcMng() {
+        
     }
+
+private:
+    std::map<std::wstring, AlpcConn> alpc_client_;
+    AlpcConn alpc_server_;
 };
 
 #endif
