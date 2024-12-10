@@ -123,24 +123,23 @@ void main_old()
 }
 
 int main() {
-
-    AlpcConn alpc;
-    alpc.connect_server(L"\\RPC Control\\YJN");
     char            szInput[POST_LEN];
     while (true) {
 
-        printf("[.] Enter Message > ");
-        fgets(szInput, POST_LEN, stdin);
+        /*printf("[.] Enter Message > ");
         RtlSecureZeroMemory(&szInput, sizeof(szInput));
+        fgets(szInput, POST_LEN, stdin);*/
+        char            szInput[POST_LEN] = "stest123,456";
 
         CJSONHandler json;
         json[L"reply"] = 1;
+        json[L"type"] = L"test";
         json[L"name"] = "test";
         json[L"name"] = "bushiba";
-        json[L"info"] = "hhh";
+        json[L"info"] = szInput;
         json[L"newobj"][L"qiantao"][L"lipu"] = L"Ç¶Ì×¶ÔÏó";
         json[L"name"][L"Ìæ»»"] = "replace";
-        std::shared_ptr<char> json_string = json.GetJsonString();
+        
 
         // ²éÕÒ²¢ÒÆ³ý»»ÐÐ·û '\n'
         size_t len = strlen(szInput);
@@ -148,11 +147,17 @@ int main() {
             szInput[len - 1] = '\0';  // ÓÃ¿Õ×Ö·ûÌæ»» '\n'
         }
 
-        if (json_string) {
-            alpc.send_msg(json_string.get());
-            // HeapFree(GetProcessHeap(), 0, recv_mem);
-        }
+        if (szInput[0] == 's') {
+            AlpcMng::getInstance().notify_msg(L"testserver", json, false);
 
+            printf("[i] server Data: ");
+            printf("%s\n", json.GetJsonString().get());
+
+        }
+        else {
+            AlpcMng::getInstance().notify_msg(L"testserver", json);
+        }
+        Sleep(5000);
     }
 
     return 0;

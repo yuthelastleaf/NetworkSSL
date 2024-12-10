@@ -11,21 +11,7 @@
 #include <memory>
 #include <string>
 
-#include "alpc_util.h"
-
-class AlpcHandlerCtx {
-public:
-    AlpcHandlerCtx(CJSONHandler& json, AlpcConn* alpc, ULONG msg_id)
-        : json_(json)
-        , alpc_(alpc)
-        , msg_id_(msg_id)
-    {}
-
-    // 可以在此添加任意的上下文数据
-    CJSONHandler& json_;
-    AlpcConn* alpc_;
-    ULONG msg_id_;
-};
+#include "../CJSON/CJSONHanler.h"
 
 class AlpcHandler {
 public:
@@ -55,20 +41,17 @@ public:
     }
 
     // 提交任务到线程池
-    void submit(const std::wstring& taskName, std::shared_ptr<Context> context) {
+    void submit(std::wstring task_name, std::shared_ptr<void> context) {
         std::lock_guard<std::mutex> lock(queueMutex);
-        if (taskMap.find(taskName) != taskMap.end()) {
+        if (taskMap.find(task_name) != taskMap.end()) {
             // 找到任务并推送到任务队列
-            tasks.push({ taskName, context });
+            tasks.push({ task_name, context });
             cv.notify_one();  // 唤醒一个等待的线程来处理任务
-        }
-        else {
-            std::cout << "Task not found: " << taskName << std::endl;
         }
     }
 
     // 注册任务到线程池
-    void registerTask(const std::wstring& taskName, std::function<void(std::shared_ptr<Context>)> taskFunc) {
+    void registerTask(const std::wstring& taskName, std::function<void(std::shared_ptr<void>)> taskFunc) {
         std::lock_guard<std::mutex> lock(taskMapMutex);
         taskMap[taskName] = taskFunc;
     }
@@ -79,7 +62,7 @@ private:
     // 工作线程处理任务的函数
     void workerThread() {
         while (true) {
-            std::pair<std::wstring, std::shared_ptr<Context>> task;
+            std::pair<std::wstring, std::shared_ptr<void>> task;
             {
                 std::unique_lock<std::mutex> lock(queueMutex);
 
@@ -112,11 +95,11 @@ private:
     AlpcHandler& operator=(const AlpcHandler&) = delete;
 
     std::vector<std::thread> workers;  // 工作线程
-    std::queue<std::pair<std::wstring, std::shared_ptr<Context>>> tasks; // 任务队列
+    std::queue<std::pair<std::wstring, std::shared_ptr<void>>> tasks; // 任务队列
     std::mutex queueMutex;             // 保护任务队列的锁
     std::condition_variable cv;        // 条件变量，用于线程同步
     std::atomic<bool> stopFlag;        // 停止标志
-    std::map<std::wstring, std::function<void(std::shared_ptr<Context>)>> taskMap;  // 任务名称映射
+    std::map<std::wstring, std::function<void(std::shared_ptr<void>)>> taskMap;  // 任务名称映射
     std::mutex taskMapMutex;           // 保护任务映射的锁
 };
 

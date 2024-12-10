@@ -10,6 +10,22 @@
 
 #include "../ntalpcapi.h"
 
+#include "alpc_register.h"
+
+class AlpcHandlerCtx {
+public:
+    AlpcHandlerCtx(ULONG msg_id, void* alpc, std::shared_ptr<CJSONHandler> json)
+        : json_(json)
+        , alpc_(alpc)
+        , msg_id_(msg_id)
+    {}
+
+    // 可以在此添加任意的上下文数据
+    ULONG msg_id_;
+    void* alpc_;
+    std::shared_ptr<CJSONHandler> json_;
+};
+
 #define POST_LEN 0x400
 
 class PostMsg
@@ -86,6 +102,9 @@ public:
         , sendrecv(0)
     {
         CStringHandler::InitChinese();
+
+        DEFAPI(NtAlpcSendWaitReceivePort);
+        sendrecv = pfunc_NtAlpcSendWaitReceivePort;
     }
     ~AlpcConn() {
 
@@ -151,14 +170,20 @@ public:
                     printf("[i] NtAlpcAcceptConnectPort: 0x%X\n", ntRet);
                 }
                 else {
-                    CJSONHandler json((char*)recvmsg.GetDataMem());
-                    if (json[L"reply"].GetInt() == 1) {
+                    std::shared_ptr<AlpcHandlerCtx> aptr =
+                        std::make_shared<AlpcHandlerCtx>(
+                            recvmsg.port_msg_.MessageId, this,
+                            std::make_shared<CJSONHandler>((char*)recvmsg.GetDataMem()));
+
+                    AlpcHandler::getInstance().submit((*aptr->json_)[L"type"].GetWString().get(),
+                        std::static_pointer_cast<void>(aptr));
+                    /*if (json[L"reply"].GetInt() == 1) {
                         json[L"replymsg"] = L"server_reply_msg";
                         std::shared_ptr<char> repstr = json.GetJsonString();
                         PostMsg replymsg(repstr.get(), recvmsg.port_msg_.MessageId, strlen(repstr.get()));
                         ntRet = pfunc_NtAlpcSendWaitReceivePort(alpc_port_, 0, (PPORT_MESSAGE)replymsg.GetMsgMem(),
                             NULL, NULL, NULL, NULL, NULL);
-                    }
+                    }*/
                 }
             }
         }
@@ -169,9 +194,6 @@ public:
     bool connect_server(const wchar_t* port_name) {
         DEFAPI(RtlInitUnicodeString);
         DEFAPI(NtAlpcConnectPort);
-        DEFAPI(NtAlpcSendWaitReceivePort);
-
-        sendrecv = pfunc_NtAlpcSendWaitReceivePort;
 
         UNICODE_STRING  usPort = { 0 };
         NTSTATUS        ntRet;
@@ -270,11 +292,12 @@ private:
     // 私有构造函数
     AlpcMng() {
         CStringHandler::InitChinese();
+        AlpcHandler::getInstance().start(4);
     }
 
     // 私有析构函数（通常不需要，但可以加以防止意外销毁）
     ~AlpcMng() {
-        
+        AlpcHandler::getInstance().stop();
     }
 
 private:

@@ -13,6 +13,7 @@ typedef struct _cJSONHanlerObj {
 
 #include <memory>
 
+
 class CJSONHandler
 {
 public:
@@ -164,7 +165,9 @@ public:
     }
 
     std::unique_ptr<wchar_t> GetWString() const {
-        std::unique_ptr<wchar_t> res(nullptr);
+        wchar_t* obj_str = new wchar_t[1];
+        memset(obj_str, 0, sizeof(wchar_t));
+        std::unique_ptr<wchar_t> res(obj_str);
         do {
             if (!m_object.json_obj) {
                 break;
@@ -174,12 +177,12 @@ public:
                 break;
             }
 
-            wchar_t* obj_str = nullptr;
-            if (!CStringHandler::Ansi2WChar(m_object.json_obj->valuestring, obj_str)) {
+            wchar_t* new_obj_str = nullptr;
+            if (!CStringHandler::Ansi2WChar(m_object.json_obj->valuestring, new_obj_str)) {
                 break;
             }
 
-            res.reset(obj_str);
+            res.reset(new_obj_str);
         } while (0);
 
         return std::move(res);  // 如果没有找到字符串或类型不匹配

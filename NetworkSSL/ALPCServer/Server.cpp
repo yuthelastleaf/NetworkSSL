@@ -167,8 +167,19 @@ void main()
     /*hThread = CreateThread(NULL, 0, &CreatePortAndListen, (LPVOID)port_name, 0, NULL);
     WaitForSingleObject(hThread, INFINITE);*/
 
-    AlpcConn alpc;
-    alpc.create_server(L"\\RPC Control\\YJN");
+
+    AlpcHandler::getInstance().registerTask(L"test", [](std::shared_ptr<void> ctx) {
+        // 尝试将 void 指针转回 AlpcHandlerCtx
+        auto alpcContext = std::static_pointer_cast<AlpcHandlerCtx>(ctx);
+        printf("client data: \n%s\n", alpcContext->json_->GetJsonString().get());
+        if ((*alpcContext->json_)[L"reply"].GetInt() == 1) {
+            (*alpcContext->json_)[L"replymsg"] = L"server_reply_msg";
+            AlpcConn* alpc_con = (AlpcConn*)alpcContext->alpc_;
+            alpc_con->post_msg(*alpcContext->json_, alpcContext->msg_id_);
+        }
+        });
+
+    AlpcMng::getInstance().run_server(L"testserver");
 
     // printf("[!] Shuting down server\n");
     getchar();
