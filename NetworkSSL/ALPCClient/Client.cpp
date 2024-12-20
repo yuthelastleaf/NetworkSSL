@@ -126,38 +126,37 @@ int main() {
     char            szInput[POST_LEN];
     while (true) {
 
-        /*printf("[.] Enter Message > ");
+        printf("[.] Enter Message > ");
         RtlSecureZeroMemory(&szInput, sizeof(szInput));
-        fgets(szInput, POST_LEN, stdin);*/
-        char            szInput[POST_LEN] = "stest123,456";
+        fgets(szInput, POST_LEN, stdin);
+        // char            szInput[POST_LEN] = "stest123,456";
 
-        CJSONHandler json;
-        json[L"reply"] = 1;
-        json[L"type"] = L"test";
-        json[L"name"] = "test";
-        json[L"name"] = "bushiba";
-        json[L"info"] = szInput;
-        json[L"newobj"][L"qiantao"][L"lipu"] = L"Ç¶Ì×¶ÔÏó";
-        json[L"name"][L"Ìæ»»"] = "replace";
-        
-
-        // ²éÕÒ²¢ÒÆ³ý»»ÐÐ·û '\n'
         size_t len = strlen(szInput);
         if (len > 0 && szInput[len - 1] == '\n') {
             szInput[len - 1] = '\0';  // ÓÃ¿Õ×Ö·ûÌæ»» '\n'
         }
 
+        CJSONHandler json;
+        json[L"reply"] = 1;
+        json[L"type"] = szInput;
+        json[L"name"] = "test";
+        json[L"name"] = "bushiba";
+        json[L"info"]["notify"] = szInput;
+        json[L"newobj"][L"qiantao"][L"lipu"] = L"Ç¶Ì×¶ÔÏó";
+        json[L"name"][L"Ìæ»»"] = "replace";
+        
+        
+
         if (szInput[0] == 's') {
-            AlpcMng::getInstance().notify_msg(L"testserver", json, false);
+            AlpcMng::getInstance().notify_msg(L"yjnserver", json, false);
 
             printf("[i] server Data: ");
             printf("%s\n", json.GetJsonString().get());
 
         }
         else {
-            AlpcMng::getInstance().notify_msg(L"testserver", json);
+            AlpcMng::getInstance().notify_msg(L"yjnserver", json);
         }
-        Sleep(5000);
     }
 
     return 0;

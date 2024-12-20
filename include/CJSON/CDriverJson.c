@@ -8,7 +8,51 @@ size_t ctm_strlen(const char* str)
     return (s - str);
 }
 
-cJSON_bool InitDriverJSON(cDriverJSON** json, cJSON* obj, cJSON* parent)
+cJSON_bool ctm_strcmp(const char* src, const char* dst) {
+    cJSON_bool flag = cJSON_False;
+    if (src && dst) {
+        size_t slen = ctm_strlen(src);
+        size_t dlen = ctm_strlen(dst);
+        if (slen == dlen) {
+            int cmp_len = 0;
+            for (cmp_len = 0; cmp_len < slen; cmp_len++) {
+                if (src[cmp_len] != dst[cmp_len]) {
+                    break;
+                }
+            }
+            if (cmp_len == slen) {
+                flag = cJSON_True;
+            }
+        }
+    }
+    return flag;
+}
+
+cJSON_bool __stdcall CreateDJson(cDriverJSON** json, const char* str_json)
+{
+    cJSON_bool flag = cJSON_False;
+
+    cJSON* obj = cJSON_Parse(str_json);
+
+    flag = InitDriverJSON(json, obj, NULL);
+
+    if (!flag) {
+        cJSON_Delete(obj);
+    }
+
+    return flag;
+}
+
+cJSON_bool __stdcall ReleaseDJson(cDriverJSON* json)
+{
+    cJSON_bool flag = cJSON_False;
+    if (!json->parent && json->json_obj) {
+        cJSON_Delete(json->json_obj);
+    }
+    return flag;
+}
+
+cJSON_bool __stdcall InitDriverJSON(cDriverJSON** json, cJSON* obj, cJSON* parent)
 {
     cJSON_bool flag = cJSON_False;
 
@@ -40,7 +84,7 @@ cJSON_bool InitDriverJSON(cDriverJSON** json, cJSON* obj, cJSON* parent)
 	return flag;
 }
 
-cJSON_bool setstring(cDriverJSON* json, const char* value)
+cJSON_bool __stdcall setstring(cDriverJSON* json, const char* value)
 {
     cJSON_bool flag = cJSON_False;
 
@@ -58,12 +102,16 @@ cJSON_bool setstring(cDriverJSON* json, const char* value)
     return flag;
 }
 
-cJSON_bool setwstring(cDriverJSON* json, const wchar_t* value)
+cJSON_bool __stdcall setwstring(cDriverJSON* json, const wchar_t* value)
 {
+    _Unreferenced_parameter_(json);
+    _Unreferenced_parameter_(value);
+
+
     return cJSON_False;
 }
 
-cJSON_bool setint(cDriverJSON* json, const int value)
+cJSON_bool __stdcall setint(cDriverJSON* json, const int value)
 {
     cJSON_bool flag = cJSON_False;
 
@@ -81,7 +129,7 @@ cJSON_bool setint(cDriverJSON* json, const int value)
     return flag;
 }
 
-char* getstring(cDriverJSON* json)
+char* __stdcall getstring(cDriverJSON* json)
 {
     char* res = NULL;
     do {
@@ -97,7 +145,7 @@ char* getstring(cDriverJSON* json)
     return res;
 }
 
-char* getjsonstring(cDriverJSON* json)
+char* __stdcall getjsonstring(cDriverJSON* json)
 {
     char* res = NULL;
     do
@@ -111,7 +159,7 @@ char* getjsonstring(cDriverJSON* json)
     return res;
 }
 
-int getint(cDriverJSON* json)
+int __stdcall getint(cDriverJSON* json)
 {
     int res = 0;
     do {
@@ -127,7 +175,7 @@ int getint(cDriverJSON* json)
     return res;
 }
 
-cDriverJSON* get(cDriverJSON* json, const char* path)
+cDriverJSON* __stdcall get(cDriverJSON* json, const char* path)
 {
     cDriverJSON* dst_json = json;
     do

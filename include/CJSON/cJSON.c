@@ -194,7 +194,7 @@ static void* CJSON_CDECL internal_malloc(size_t size)
 
 static void CJSON_CDECL internal_free(void* pointer)
 {
-    ExFreePool(pointer);
+    ExFreePoolWithTag(pointer, CJSONTAG);
 }
 
 static void* CJSON_CDECL internal_realloc(void* pointer, size_t size)

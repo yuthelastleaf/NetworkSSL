@@ -1055,6 +1055,37 @@ ZwAlpcAcceptConnectPort(
 	_In_ BOOLEAN AcceptConnection
 );
 
+NTSYSCALLAPI
+NTSTATUS
+NTAPI
+ZwAlpcConnectPort(
+	_Out_ PHANDLE PortHandle,
+	_In_ PUNICODE_STRING PortName,
+	_In_opt_ POBJECT_ATTRIBUTES ObjectAttributes,
+	_In_opt_ PALPC_PORT_ATTRIBUTES PortAttributes,
+	_In_ ULONG Flags,
+	_In_opt_ PSID RequiredServerSid,
+	_Inout_updates_bytes_to_opt_(*BufferLength, *BufferLength) PPORT_MESSAGE ConnectionMessage,
+	_Inout_opt_ PULONG BufferLength, _Inout_opt_ PALPC_MESSAGE_ATTRIBUTES OutMessageAttributes,
+	_Inout_opt_ PALPC_MESSAGE_ATTRIBUTES InMessageAttributes,
+	_In_opt_ PLARGE_INTEGER Timeout);
+
+NTSYSCALLAPI
+NTSTATUS 
+NTAPI 	
+ZwAlpcConnectPortEx(
+	_Out_ PHANDLE PortHandle,
+	_In_ POBJECT_ATTRIBUTES ConnectionPortObjectAttributes, 
+	_In_opt_ POBJECT_ATTRIBUTES ClientPortObjectAttributes,
+	_In_opt_ PALPC_PORT_ATTRIBUTES PortAttributes, 
+	_In_ ULONG Flags, 
+	_In_opt_ PSECURITY_DESCRIPTOR ServerSecurityRequirements, 
+	_Inout_updates_bytes_to_opt_(*BufferLength, *BufferLength) PPORT_MESSAGE ConnectionMessage, 
+	_Inout_opt_ PSIZE_T BufferLength, 
+	_Inout_opt_ PALPC_MESSAGE_ATTRIBUTES OutMessageAttributes, 
+	_Inout_opt_ PALPC_MESSAGE_ATTRIBUTES InMessageAttributes,
+	_In_opt_ PLARGE_INTEGER Timeout);
+
 NTSYSAPI
 NTSTATUS
 NTAPI
@@ -1337,6 +1368,11 @@ typedef VOID (*RtlCopyUnicodeString_FuncType)(
 	_In_opt_ PCUNICODE_STRING SourceString
 );
 
+typedef NTSTATUS (*RtlAppendUnicodeToString_FuncType)(
+	_In_opt_ PUNICODE_STRING Destination,
+	_In_opt_ PCWSTR          Source
+);
+
 typedef NTSTATUS(NTAPI* NtQueryInformationProcess_FuncType)(
 	_In_ HANDLE ProcessHandle,
 	_In_ int ProcessInformationClass,
@@ -1364,7 +1400,9 @@ typedef NTSTATUS(NTAPI* RtlGetVersion_FuncType)(
 #endif
 
 // end_private
-#define MAX_MSG_LEN 0x500
+#ifndef MAX_MSG_LEN
+#define MAX_MSG_LEN 0x400
+#endif
 
 #ifdef _KERNEL_MODE
 
