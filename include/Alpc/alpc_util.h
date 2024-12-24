@@ -146,6 +146,18 @@ public:
         return flag;
     }
 
+    bool disconnect_server() {
+        NTSTATUS ntRet = 0;
+        if (alpc_port_) {
+            DEFAPI(NtAlpcDisconnectPort);
+            
+            ntRet = pfunc_NtAlpcDisconnectPort(alpc_port_, 0);
+            CloseHandle(alpc_port_);
+            alpc_port_ = 0;
+        }
+        return NT_SUCCESS(ntRet);
+    }
+
     void run_server() {
 
         DEFAPI(NtAlpcSendWaitReceivePort);
@@ -263,6 +275,10 @@ public:
     // Ê¾Àý·½·¨
     bool run_server(const wchar_t* port_name) {
         return alpc_server_.create_server(port_name);
+    }
+
+    bool stop_server() {
+        return alpc_server_.disconnect_server();
     }
 
     bool notify_msg(const wchar_t* port_name, CJSONHandler& json, bool post = true) {

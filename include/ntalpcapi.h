@@ -1017,6 +1017,9 @@ AlpcGetCompletionListMessageAttributes(
 );
 
 /******************************************声明未文档化方法***********************************************/
+
+// NTSTATUS ZwClose(HANDLE Handle);
+
 NTSYSAPI
 NTSTATUS
 NTAPI
@@ -1096,6 +1099,13 @@ ZwAlpcDisconnectPort(
 
 
 /***********************************************************************************************************/
+
+// 先声明
+NTKERNELAPI
+UCHAR*
+PsGetProcessImageFileName(
+	__in PEPROCESS Process
+);
 
 
 /******************************************定义为函数指针类型***********************************************/
