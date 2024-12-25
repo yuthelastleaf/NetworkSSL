@@ -1100,13 +1100,27 @@ ZwAlpcDisconnectPort(
 
 /***********************************************************************************************************/
 
-// 先声明
+#ifdef _KERNEL_MODE
+// 声明系统api，防止与头文件重定义了
 NTKERNELAPI
 UCHAR*
 PsGetProcessImageFileName(
 	__in PEPROCESS Process
 );
 
+NTKERNELAPI
+NTSTATUS
+PsLookupProcessByProcessId(
+	_In_ HANDLE ProcessId,
+	_Out_ PEPROCESS* Process
+);
+
+NTKERNELAPI
+HANDLE
+PsGetCurrentProcessId(
+	VOID
+);
+#endif
 
 /******************************************定义为函数指针类型***********************************************/
 typedef NTSTATUS(*NtAlpcCreatePort_FuncType)(

@@ -168,19 +168,25 @@ void main()
     WaitForSingleObject(hThread, INFINITE);*/
 
 
-    AlpcHandler::getInstance().registerTask(L"test", [](std::shared_ptr<void> ctx) {
+    AlpcHandler::getInstance().registerTask(L"ALEWFP", [](std::shared_ptr<void> ctx) {
         // 尝试将 void 指针转回 AlpcHandlerCtx
         auto alpcContext = std::static_pointer_cast<AlpcHandlerCtx>(ctx);
-        printf("client data: \n%s\n", alpcContext->json_->GetJsonString().get());
-        if ((*alpcContext->json_)[L"reply"].GetInt() == 1) {
+        printf("wfp data: \n%s\n", alpcContext->json_->GetJsonString().get());
+        /*if ((*alpcContext->json_)[L"reply"].GetInt() == 1) {
             (*alpcContext->json_)[L"replymsg"] = L"server_reply_msg";
             AlpcConn* alpc_con = (AlpcConn*)alpcContext->alpc_;
             alpc_con->post_msg(*alpcContext->json_, alpcContext->msg_id_);
-        }
+        }*/
         });
 
-    AlpcMng::getInstance().run_server(L"testserver");
+    /*while (true) {
 
+        
+        AlpcMng::getInstance().stop_server();
+
+        Sleep(1000);
+    }*/
+    AlpcMng::getInstance().run_server(L"yjnclient");
     // printf("[!] Shuting down server\n");
     getchar();
     return;

@@ -148,14 +148,14 @@ int main() {
         
 
         if (szInput[0] == 's') {
-            AlpcMng::getInstance().notify_msg(L"yjnserver", json, false);
+            AlpcMng::getInstance().notify_msg(L"yjnclient", json, false);
 
             printf("[i] server Data: ");
             printf("%s\n", json.GetJsonString().get());
 
         }
         else {
-            AlpcMng::getInstance().notify_msg(L"yjnserver", json);
+            AlpcMng::getInstance().notify_msg(L"yjnclient", json);
         }
     }
 

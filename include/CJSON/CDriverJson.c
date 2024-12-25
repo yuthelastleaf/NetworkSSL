@@ -73,10 +73,18 @@ cJSON_bool __stdcall InitDriverJSON(cDriverJSON** json, cJSON* obj, cJSON* paren
         (*json)->get = get;
         (*json)->getint = getint;
         (*json)->getstring = getstring;
+        
+        (*json)->getpathint = getpathint;
+        (*json)->getpathstring = getpathstring;
+        
         (*json)->getjsonstring = getjsonstring;
         (*json)->setint = setint;
         (*json)->setstring = setstring;
         (*json)->setwstring = setwstring;
+        
+        (*json)->setpathint = setpathint;
+        (*json)->setpathstring = setpathstring;
+        (*json)->setpathwstring = setpathwstring;
 
         flag = cJSON_True;
     }
@@ -129,6 +137,24 @@ cJSON_bool __stdcall setint(cDriverJSON* json, const int value)
     return flag;
 }
 
+cJSON_bool __stdcall setpathstring(cDriverJSON* json, const char* path, const char* value)
+{
+    cDriverJSON* obj = json->get(json, path);
+    return obj->setstring(obj, value);
+}
+
+cJSON_bool __stdcall setpathwstring(cDriverJSON* json, const char* path, const wchar_t* value)
+{
+    cDriverJSON* obj = json->get(json, path);
+    return obj->setwstring(obj, value);
+}
+
+cJSON_bool __stdcall setpathint(cDriverJSON* json, const char* path, const int value)
+{
+    cDriverJSON* obj = json->get(json, path);
+    return obj->setint(obj, value);
+}
+
 char* __stdcall getstring(cDriverJSON* json)
 {
     char* res = NULL;
@@ -173,6 +199,18 @@ int __stdcall getint(cDriverJSON* json)
     } while (0);
 
     return res;
+}
+
+char* __stdcall getpathstring(cDriverJSON* json, const char* path)
+{
+    cDriverJSON* obj = json->get(json, path);
+    return obj->getstring(obj);
+}
+
+int __stdcall getpathint(cDriverJSON* json, const char* path)
+{
+    cDriverJSON* obj = json->get(json, path);
+    return obj->getint(obj);
 }
 
 cDriverJSON* __stdcall get(cDriverJSON* json, const char* path)
