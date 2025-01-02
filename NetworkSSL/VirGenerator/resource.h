@@ -2,6 +2,7 @@
 // Microsoft Visual C++ 生成的包含文件。
 // 供 Generator.rc 使用
 //
+#define IDR_LUA                         65533
 #define IDR_PH                          65534
 #define IDR_BINARY_FILE                 65535
 
