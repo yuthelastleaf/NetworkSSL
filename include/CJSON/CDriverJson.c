@@ -98,8 +98,8 @@ cJSON_bool __stdcall setstring(cDriverJSON* json, const char* value)
 
     if (json->parent) {
         if (json->json_obj) {
-            if (cJSON_UpdateType(json->json_obj, cJSON_String)) {
-                if (cJSON_UpdateType(json->parent, cJSON_Object)) {
+            if (cJSON_UpdateType(json->json_obj, cJSON_String) == cJSON_True) {
+                if (cJSON_UpdateType(json->parent, cJSON_Object) == cJSON_True) {
                     cJSON_SetValuestring(json->json_obj, value);
                     flag = cJSON_True;
                 }
@@ -125,8 +125,8 @@ cJSON_bool __stdcall setint(cDriverJSON* json, const int value)
 
     if (json->parent) {
         if (json->json_obj) {
-            if (cJSON_UpdateType(json->json_obj, cJSON_Number)) {
-                if (cJSON_UpdateType(json->parent, cJSON_Object)) {
+            if (cJSON_UpdateType(json->json_obj, cJSON_Number) == cJSON_True) {
+                if (cJSON_UpdateType(json->parent, cJSON_Object) == cJSON_True) {
                     cJSON_SetIntValue(json->json_obj, value);
                     flag = cJSON_True;
                 }

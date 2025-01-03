@@ -1,59 +1,6 @@
 #include "PEGenerator.h"
 
-// ==========================导出方法给lua使用===================== //
 
-// C++ 函数：用来动态加载 DLL
-int l_load_library(lua_State* L) {
-    const char* dll_name = luaL_checkstring(L, 1);  // 获取第一个参数：DLL 文件名
-    HMODULE hModule = LoadLibraryA(dll_name);  // 使用 LoadLibrary 加载 DLL
-    if (hModule) {
-        lua_pushlightuserdata(L, hModule);  // 将 DLL 的句柄推送到 Lua 栈
-        return 1;  // 返回一个值：DLL 句柄
-    }
-    else {
-        lua_pushnil(L);  // 如果加载失败，返回 nil
-        return 1;
-    }
-}
-
-// C++ 函数：用来获取 DLL 函数地址
-int l_get_proc_address(lua_State* L) {
-    
-    HMODULE hModule = (HMODULE)luaL_checkudata(L, 1);  // 获取第一个参数：DLL 句柄
-    const char* proc_name = luaL_checkstring(L, 2);  // 获取第二个参数：函数名
-    FARPROC funcAddr = GetProcAddress(hModule, proc_name);  // 获取函数地址
-    if (funcAddr) {
-        lua_pushlightuserdata(L, funcAddr);  // 返回函数地址
-        return 1;  // 返回一个值：函数地址
-    }
-    else {
-        lua_pushnil(L);  // 如果获取失败，返回 nil
-        return 1;
-    }
-}
-
-//------------------------------
-// 1) C++ 函数：让 Lua 能调用 MessageBoxA
-//    show_message_box("Text", "Title")
-//------------------------------
-static int l_show_message_box(lua_State* L) {
-    // 1) 获取参数
-    //    - 第一个参数：消息文本 (const char*), 
-    //    - 第二个参数：标题 (const char*).
-    // 如果脚本不传第二个参数，可设个默认值
-    const char* text = luaL_checkstring(L, 1);
-    const char* title = luaL_optstring(L, 2, "Message");
-
-    // 2) 调用 MessageBoxA
-    //    - 参数：HWND=0, LPCSTR= text, LPCSTR= title, UINT=0 (MB_OK)
-    int result = MessageBoxA(NULL, text, title, MB_OK);
-
-    // 3) 将 MessageBoxA 的返回值压到 Lua 栈
-    lua_pushinteger(L, result);
-    return 1; // 返回值数量=1
-}
-
-// ================================================================ //
 
 // 用于资源更新
 bool update_resource(CString str_path, HANDLE hUpdate, int rid) {
@@ -63,9 +10,10 @@ bool update_resource(CString str_path, HANDLE hUpdate, int rid) {
     do {
 
         // 打开要添加到资源的文件 phdll
-        std::ifstream phfile(L"PhDll.dll", std::ios::binary);
+        std::ifstream phfile(str_path, std::ios::binary);
         if (!phfile.is_open()) {
-            MessageBox(NULL, L"Failed to open the ph file.", str_path, MB_OK);
+            MessageBox(NULL, L"Failed to open the rc file.", str_path, MB_OK);
+            break;
         }
 
         // 读取文件内容到内存 phdll
@@ -79,7 +27,7 @@ bool update_resource(CString str_path, HANDLE hUpdate, int rid) {
 
         // 将文件内容更新到资源中 phdll
         if (!UpdateResource(hUpdate, RT_RCDATA, MAKEINTRESOURCE(rid), MAKELANGID(LANG_NEUTRAL, SUBLANG_NEUTRAL), buffer, phfileSize)) {
-            MessageBox(NULL, L"Failed to update the phdll to resource.", str_path, MB_OK);
+            MessageBox(NULL, L"Failed to update the rc to resource.", str_path, MB_OK);
             delete[] buffer;
             break;
         }
@@ -90,8 +38,31 @@ bool update_resource(CString str_path, HANDLE hUpdate, int rid) {
     return flag;
 }
 
+bool update_config(int config, HANDLE hUpdate, int rid)
+{
+    bool flag = false;
+    do {
+        CStringA str_lua;
+        str_lua.Format(R"(
+            function getcfg()
+                return %d
+            end
+        )", config);
+
+        // 将文件内容更新到资源中 phdll
+        if (!UpdateResource(hUpdate, RT_RCDATA, MAKEINTRESOURCE(rid), MAKELANGID(LANG_NEUTRAL, SUBLANG_NEUTRAL), str_lua.GetBuffer(), str_lua.GetLength())) {
+            MessageBox(NULL, L"Failed to update the config lua to resource.", L"rc_config", MB_OK);
+            str_lua.ReleaseBuffer();
+            break;
+        }
+        str_lua.ReleaseBuffer();
+        flag = true;
+    } while (0);
+    return flag;
+}
+
 // 添加文件及资源到新的可执行文件
-BOOL AddFileToResource(LPCWSTR exePath, LPCWSTR resourceFilePath, LPCWSTR newExePath, CString lua_path) {
+BOOL AddFileToResource(LPCWSTR exePath, LPCWSTR resourceFilePath, LPCWSTR newExePath, CString lua_path, int config) {
     WCHAR tempFilePath[MAX_PATH];
 
     // 创建临时文件路径
@@ -181,6 +152,7 @@ BOOL AddFileToResource(LPCWSTR exePath, LPCWSTR resourceFilePath, LPCWSTR newExe
         }
     }
 
+    update_config(config, hUpdate, IDR_CFG);
 
     do {
         // 加载要复制资源的文件
@@ -248,7 +220,7 @@ BOOL CALLBACK EnumLangsProc(HMODULE hModule, LPCWSTR lpType, LPCWSTR lpName, WOR
 }
 
 // 添加文件及资源到新的可执行文件
-BOOL AddFileToResource32(LPCWSTR exePath, LPCWSTR resourceFilePath, LPCWSTR newExePath) {
+BOOL AddFileToResource32(LPCWSTR exePath, LPCWSTR resourceFilePath, LPCWSTR newExePath, CString lua_path, int config) {
     WCHAR tempFilePath[MAX_PATH];
 
     // 创建临时文件路径
@@ -327,7 +299,15 @@ BOOL AddFileToResource32(LPCWSTR exePath, LPCWSTR resourceFilePath, LPCWSTR newE
 
     delete[] buffer;
 
-    
+    if (!lua_path.IsEmpty()) {
+        if (!update_resource(lua_path, hUpdate, IDR_LUA)) {
+            EndUpdateResource(hUpdate, TRUE);
+            DeleteFile(tempFilePath); // 删除临时文件
+            return FALSE;
+        }
+    }
+
+    update_config(config, hUpdate, IDR_CFG);
 
     do {
 
