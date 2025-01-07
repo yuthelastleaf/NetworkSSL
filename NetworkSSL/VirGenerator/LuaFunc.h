@@ -28,7 +28,7 @@ public:
         FILE* file = NULL;
 
         std::string str_path = lua_file;
-        if (str_path.find_first_of(':') == std::string::npos) {
+        if (str_path.find(':') == std::string::npos) {
             str_path = GetCurrentProcessDirectory() + "\\" + lua_file;
             fopen_s(&file, str_path.c_str(), "rb");
         }

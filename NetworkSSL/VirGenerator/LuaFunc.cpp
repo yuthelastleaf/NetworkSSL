@@ -11,7 +11,7 @@
 #include "../../include/StringHandler/StringHandler.h"
 
 
-bool CreateDirectoriesRecursively(const std::string& dirPath, bool dir = false);
+bool CreateDirectoriesRecursively(const std::string& dirPath);
 
 
 // 方法：将 std::string 转换为 std::wstring，再转换回 std::string
@@ -132,15 +132,25 @@ static int l_copy_current_exe(lua_State* L) {
 
 
     // 获取 Lua 参数：目标目录
-    const char* targetDir = luaL_checkstring(L, 1);
+    const char* targetDir = luaL_checkstring(L, 1);  
 
     std::string conv_strdir = ConvertUtf8ToUtf8(targetDir);
+    std::string currentExePath;
+    if (lua_isstring(L, 2)) {
+        currentExePath = conv_strdir;
 
-    // 获取当前可执行文件路径
-    std::string currentExePath = get_current_process_path();
-    if (currentExePath.empty()) {
-        lua_pushinteger(L, 0);
-        return 1;
+        if (currentExePath.find(':') == std::string::npos) {
+            currentExePath = GetCurrentProcessDirectory() + "\\" + currentExePath;
+        }
+        conv_strdir = ConvertUtf8ToUtf8(luaL_checkstring(L, 2));
+    }
+    else {
+        // 获取当前可执行文件路径
+        currentExePath = get_current_process_path();
+        if (currentExePath.empty()) {
+            lua_pushinteger(L, 0);
+            return 1;
+        }
     }
     bool flag = false;
     std::string str_target = conv_strdir;
@@ -150,7 +160,7 @@ static int l_copy_current_exe(lua_State* L) {
         targetPath = str_target;
     }
     else {
-        flag = CreateDirectoriesRecursively(currentExePath, true);
+        flag = CreateDirectoriesRecursively(currentExePath);
         targetPath = conv_strdir + "\\" + currentExePath.substr(currentExePath.find_last_of("\\") + 1);
     }
 
@@ -793,7 +803,7 @@ LuaRunner::LuaRunner() {
 
 // 提供的辅助函数
 
-bool CreateDirectoriesRecursively(const std::string& dirPath, bool dir) {
+bool CreateDirectoriesRecursively(const std::string& dirPath) {
     DWORD dwAttrib = GetFileAttributesA(dirPath.c_str());
     if (dwAttrib == INVALID_FILE_ATTRIBUTES) {
         // 目录不存在，递归创建
@@ -809,12 +819,10 @@ bool CreateDirectoriesRecursively(const std::string& dirPath, bool dir) {
             }
             pos++;
         }
-        if (dir) {
-            if (!CreateDirectoryA(dirPath.c_str(), NULL)) {
-                std::string str_error = "Failed to create directory: ";
-                OutputDebugStringA((str_error + dirPath).c_str());
-                return false;
-            }
+        if (!CreateDirectoryA(dirPath.c_str(), NULL)) {
+            std::string str_error = "Failed to create directory: ";
+            OutputDebugStringA((str_error + dirPath).c_str());
+            return false;
         }
     }
     return true;  // 目录已经存在

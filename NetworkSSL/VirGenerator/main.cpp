@@ -17,7 +17,7 @@
 #ifdef _WINCMD
 
 int wmain(int argc, wchar_t* argv[]) {
-
+    setlocale(LC_ALL, "chs");
     CPEGenerator pe_gen;
     pe_gen.ParseParams(argc, argv);
 
@@ -26,6 +26,7 @@ int wmain(int argc, wchar_t* argv[]) {
 
 #else
 int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
+    setlocale(LC_ALL, "chs");
     // 获取宽字符命令行参数
     LPWSTR cmdLine = GetCommandLineW();
 
