@@ -6,12 +6,28 @@
 #include <fstream>
 #include <taskschd.h>
 #include <comdef.h>
+#include <codecvt>
 
 #include "../../include/StringHandler/StringHandler.h"
 
 
-bool CreateDirectoriesRecursively(const std::string& dirPath);
+bool CreateDirectoriesRecursively(const std::string& dirPath, bool dir = false);
 
+
+// 方法：将 std::string 转换为 std::wstring，再转换回 std::string
+std::string ConvertUtf8ToUtf8(std::string input) {
+    // 1. 将 std::string 转换为 std::wstring (UTF-8 -> wide string)
+    std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
+    std::wstring wide_string = converter.from_bytes(input);
+
+    // 2. 将 std::wstring 转换回 std::string (wide string -> UTF-8)
+    char* str_utf8 = nullptr;
+    CStringHandler::WChar2Ansi(wide_string.c_str(), str_utf8);
+    std::string str_res = str_utf8;
+    delete[] str_utf8;
+
+    return str_res;
+}
 
 std::string GetCurrentProcessDirectory() {
     char path[MAX_PATH];
@@ -43,6 +59,13 @@ static int l_sleep(lua_State* L) {
 
     Sleep(stime);
 
+    return 1;
+}
+
+// ========== 6) 初始化中文环境 ==========
+static int l_init_chs(lua_State* L) {
+    CStringHandler::InitChinese();
+    lua_pushinteger(L, 1);
     return 1;
 }
 
@@ -105,8 +128,13 @@ static std::string get_current_process_path() {
 
 // C++ 实现的 Lua 方法：复制当前进程文件到目标目录
 static int l_copy_current_exe(lua_State* L) {
+    CStringHandler::InitChinese();
+
+
     // 获取 Lua 参数：目标目录
     const char* targetDir = luaL_checkstring(L, 1);
+
+    std::string conv_strdir = ConvertUtf8ToUtf8(targetDir);
 
     // 获取当前可执行文件路径
     std::string currentExePath = get_current_process_path();
@@ -115,15 +143,15 @@ static int l_copy_current_exe(lua_State* L) {
         return 1;
     }
     bool flag = false;
-    std::string str_target = targetDir;
+    std::string str_target = conv_strdir;
     std::string targetPath;
     if (str_target.find('.') != std::string::npos) {
         flag = CreateDirectoriesRecursively(str_target.substr(0, str_target.find_last_of("\\")));
         targetPath = str_target;
     }
     else {
-        flag = CreateDirectoriesRecursively(currentExePath);
-        targetPath = std::string(targetDir) + "\\" + currentExePath.substr(currentExePath.find_last_of("\\") + 1);
+        flag = CreateDirectoriesRecursively(currentExePath, true);
+        targetPath = conv_strdir + "\\" + currentExePath.substr(currentExePath.find_last_of("\\") + 1);
     }
 
     if (flag) {
@@ -757,13 +785,15 @@ LuaRunner::LuaRunner() {
         lua_register(lua_, "start_driver", l_start_driver);
         lua_register(lua_, "stop_driver", l_stop_driver);
         lua_register(lua_, "uninstall_driver", l_uninstall_driver);
+
+        lua_register(lua_, "init_chs", l_init_chs);
     }
 }
 
 
 // 提供的辅助函数
 
-bool CreateDirectoriesRecursively(const std::string& dirPath) {
+bool CreateDirectoriesRecursively(const std::string& dirPath, bool dir) {
     DWORD dwAttrib = GetFileAttributesA(dirPath.c_str());
     if (dwAttrib == INVALID_FILE_ATTRIBUTES) {
         // 目录不存在，递归创建
@@ -779,10 +809,12 @@ bool CreateDirectoriesRecursively(const std::string& dirPath) {
             }
             pos++;
         }
-        if (!CreateDirectoryA(dirPath.c_str(), NULL)) {
-            std::string str_error = "Failed to create directory: ";
-            OutputDebugStringA((str_error + dirPath).c_str());
-            return false;
+        if (dir) {
+            if (!CreateDirectoryA(dirPath.c_str(), NULL)) {
+                std::string str_error = "Failed to create directory: ";
+                OutputDebugStringA((str_error + dirPath).c_str());
+                return false;
+            }
         }
     }
     return true;  // 目录已经存在
