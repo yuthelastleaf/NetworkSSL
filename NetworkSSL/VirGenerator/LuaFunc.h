@@ -3,6 +3,10 @@
 #include "../../include/lua/lua.hpp"
 #include <Windows.h>
 
+#include <string>
+
+std::string GetCurrentProcessDirectory();
+
 class LuaRunner
 {
 public:
@@ -18,6 +22,48 @@ public:
             OutputDebugString(L"lua script run failed .");
         }
         return !flag;
+    }
+
+    bool run_lua_file(const char* lua_file) {
+        FILE* file = NULL;
+
+        std::string str_path = lua_file;
+        if (str_path.find_first_of(':') == std::string::npos) {
+            str_path = GetCurrentProcessDirectory() + "\\" + lua_file;
+            fopen_s(&file, str_path.c_str(), "rb");
+        }
+        else {
+            fopen_s(&file, lua_file, "rb");
+        }
+
+        if (file == nullptr) {
+            OutputDebugStringA("Failed to open file!");
+            return -1;
+        }
+
+        // 获取文件大小
+        fseek(file, 0, SEEK_END);
+        long fileSize = ftell(file);
+        fseek(file, 0, SEEK_SET);
+
+        // 分配缓冲区
+        char* buffer = new char[fileSize + 1];  // 多一个字节用于存储 '\0' 字符
+
+        // 读取文件数据到缓冲区
+        size_t bytesRead = fread_s(buffer, fileSize + 1, sizeof(char), fileSize, file);
+        if (bytesRead == 0) {
+            OutputDebugStringA("Error reading file!");
+            delete[] buffer;
+            fclose(file);
+            return -1;
+        }
+        buffer[fileSize] = '\0';  // 确保字符串终止
+
+        run_lua(buffer);
+
+        // 关闭文件并释放内存
+        fclose(file);
+        delete[] buffer;
     }
 
     int get_lua_cfg(const char* lua_data) {

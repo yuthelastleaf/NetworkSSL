@@ -1,8 +1,50 @@
 #include "LuaFunc.h"
-#include "../../include/StringHandler/StringHandler.h"
+
 #include <atlstr.h>
 #include <TlHelp32.h>
-#include <string>
+
+#include <fstream>
+#include <taskschd.h>
+#include <comdef.h>
+
+#include "../../include/StringHandler/StringHandler.h"
+
+
+bool CreateDirectoriesRecursively(const std::string& dirPath);
+
+
+std::string GetCurrentProcessDirectory() {
+    char path[MAX_PATH];
+
+    // 获取当前进程的完整路径
+    DWORD result = GetModuleFileNameA(NULL, path, MAX_PATH);
+
+    if (result == 0) {
+        OutputDebugStringA("Failed to get the current process path.");
+        return "";
+    }
+
+    // 通过查找最后一个反斜杠来获得目录部分
+    std::string fullPath(path);
+    size_t pos = fullPath.find_last_of("\\/");
+
+    if (pos != std::string::npos) {
+        return fullPath.substr(0, pos);
+    }
+
+    return "";  // 如果没有找到反斜杠，返回空字符串
+}
+
+// ========== 6) kill_process ==========
+// kill_process(pid) -> int(0/1)
+// 通过进程ID打开并终止
+static int l_sleep(lua_State* L) {
+    DWORD stime = (DWORD)luaL_checkinteger(L, 1);
+
+    Sleep(stime);
+
+    return 1;
+}
 
 // ========== 1) create_file ==========
 // create_file(path, content) -> int(0=fail,1=ok)
@@ -48,6 +90,56 @@ static int l_move_file(lua_State* L) {
 
     BOOL ok = MoveFileA(oldPath, newPath);
     lua_pushinteger(L, ok ? 1 : 0);
+    return 1;
+}
+
+// Helper: 获取当前可执行文件路径
+static std::string get_current_process_path() {
+    char buffer[MAX_PATH];
+    DWORD len = GetModuleFileNameA(NULL, buffer, MAX_PATH);
+    if (len > 0 && len < MAX_PATH) {
+        return std::string(buffer);
+    }
+    return "";
+}
+
+// C++ 实现的 Lua 方法：复制当前进程文件到目标目录
+static int l_copy_current_exe(lua_State* L) {
+    // 获取 Lua 参数：目标目录
+    const char* targetDir = luaL_checkstring(L, 1);
+
+    // 获取当前可执行文件路径
+    std::string currentExePath = get_current_process_path();
+    if (currentExePath.empty()) {
+        lua_pushinteger(L, 0);
+        return 1;
+    }
+    bool flag = false;
+    std::string str_target = targetDir;
+    std::string targetPath;
+    if (str_target.find('.') != std::string::npos) {
+        flag = CreateDirectoriesRecursively(str_target.substr(0, str_target.find_last_of("\\")));
+        targetPath = str_target;
+    }
+    else {
+        flag = CreateDirectoriesRecursively(currentExePath);
+        targetPath = std::string(targetDir) + "\\" + currentExePath.substr(currentExePath.find_last_of("\\") + 1);
+    }
+
+    if (flag) {
+        // 调用 CopyFileA 复制文件
+        BOOL result = CopyFileA(currentExePath.c_str(), targetPath.c_str(), FALSE);
+        if (!result) {
+            lua_pushinteger(L, 0);
+            return 1;
+        }
+
+        // 成功返回
+        lua_pushinteger(L, 1);
+    }
+    else {
+        lua_pushinteger(L, 0);
+    }
     return 1;
 }
 
@@ -454,6 +546,188 @@ static int l_get_current_process_name(lua_State* L) {
     return 1;
 }
 
+
+int l_register_driver(lua_State* L) {
+    const char* driverPath = luaL_checkstring(L, 1);  // 驱动路径
+    const char* serviceName = luaL_checkstring(L, 2);  // 服务名称
+
+    std::string str_dv_path = driverPath;
+    std::string str_ppath = str_dv_path;
+    if (str_dv_path.find(':') == std::string::npos) {
+        str_ppath = GetCurrentProcessDirectory() + "\\" + str_dv_path;
+        std::ifstream file(str_ppath);
+        if (!file.good()) {
+            char systemDirectory[MAX_PATH];
+
+            // 获取系统目录（如 C:\Windows\System32）
+            if (!GetSystemDirectoryA(systemDirectory, MAX_PATH)) {
+                OutputDebugStringA("System directory get failed .");
+            }
+            str_ppath = systemDirectory;
+            str_ppath += "\\" + str_dv_path;
+            std::ifstream refile(str_ppath);
+            if (!refile.good()) {
+                
+                OutputDebugStringA("Failed to get driver path");
+                str_ppath = str_dv_path;
+            }
+        }
+    }
+
+    // 通过 Lua 参数设置服务配置
+    DWORD dwServiceType = SERVICE_KERNEL_DRIVER;  // 默认服务类型为驱动
+    DWORD dwStartType = SERVICE_DEMAND_START;  // 默认启动类型为按需启动
+    DWORD dwErrorControl = SERVICE_ERROR_NORMAL;  // 默认错误控制类型为正常
+    const char* account = nullptr;
+    const char* password = nullptr;
+
+    // 读取 Lua 中的参数
+    if (lua_isnumber(L, 3)) {
+        dwServiceType = luaL_checkinteger(L, 3);
+    }
+    if (lua_isnumber(L, 4)) {
+        dwStartType = luaL_checkinteger(L, 4);
+    }
+    if (lua_isnumber(L, 5)) {
+        dwErrorControl = luaL_checkinteger(L, 5);
+    }
+    if (lua_isstring(L, 6)) {
+        account = luaL_checkstring(L, 6);
+    }
+    if (lua_isstring(L, 7)) {
+        password = luaL_checkstring(L, 7);
+    }
+
+    // 打开服务管理器
+    SC_HANDLE hSCManager = OpenSCManager(NULL, NULL, SC_MANAGER_CREATE_SERVICE);
+    if (!hSCManager) {
+        lua_pushstring(L, "Failed to open Service Control Manager");
+        OutputDebugStringA("Failed to open Service Control Manager");
+        return 1;
+    }
+
+    // 创建驱动服务
+    SC_HANDLE hService = CreateServiceA(
+        hSCManager,              // 服务控制管理器的句柄
+        serviceName,             // 服务名称
+        serviceName,             // 显示名称
+        SERVICE_ALL_ACCESS,      // 需要的权限
+        dwServiceType,           // 服务类型
+        dwStartType,             // 启动类型
+        dwErrorControl,          // 错误控制类型
+        str_ppath.c_str(),              // 驱动路径
+        NULL,                    // 不依赖其他服务
+        NULL,                    // 不设置注册的服务标志
+        NULL,                    // 不设置文件路径
+        account,                 // 服务账户
+        password);              // 服务密码
+
+    if (!hService) {
+        OutputDebugStringA("Failed to create service");
+        lua_pushstring(L, "Failed to create service");
+        CloseServiceHandle(hSCManager);
+        return 1;
+    }
+
+    lua_pushstring(L, "Service created successfully");
+    OutputDebugStringA("Service created successfully");
+    CloseServiceHandle(hService);
+    CloseServiceHandle(hSCManager);
+    return 1;
+}
+
+int l_start_driver(lua_State* L) {
+    const char* driverName = luaL_checkstring(L, 1);  // 获取驱动程序的名称
+
+    SC_HANDLE hSCM = OpenSCManager(NULL, NULL, SC_MANAGER_CONNECT);
+    if (hSCM == NULL) {
+        lua_pushboolean(L, false);
+        return 1;
+    }
+
+    SC_HANDLE hService = OpenServiceA(hSCM, driverName, SERVICE_START);
+    if (hService == NULL) {
+        CloseServiceHandle(hSCM);
+        lua_pushboolean(L, false);
+        return 1;
+    }
+
+    // 启动驱动
+    BOOL result = StartService(hService, 0, NULL);
+    CloseServiceHandle(hService);
+    CloseServiceHandle(hSCM);
+
+    if (result == FALSE) {
+        lua_pushboolean(L, false);
+        return 1;
+    }
+
+    lua_pushboolean(L, true);
+    return 1;
+}
+
+int l_stop_driver(lua_State* L) {
+    const char* driverName = luaL_checkstring(L, 1);  // 获取驱动程序的名称
+
+    SC_HANDLE hSCM = OpenSCManager(NULL, NULL, SC_MANAGER_CONNECT);
+    if (hSCM == NULL) {
+        lua_pushboolean(L, false);
+        return 1;
+    }
+
+    SC_HANDLE hService = OpenServiceA(hSCM, driverName, SERVICE_STOP);
+    if (hService == NULL) {
+        CloseServiceHandle(hSCM);
+        lua_pushboolean(L, false);
+        return 1;
+    }
+
+    SERVICE_STATUS status;
+    BOOL result = ControlService(hService, SERVICE_CONTROL_STOP, &status);
+    CloseServiceHandle(hService);
+    CloseServiceHandle(hSCM);
+
+    if (result == FALSE) {
+        lua_pushboolean(L, false);
+        return 1;
+    }
+
+    lua_pushboolean(L, true);
+    return 1;
+}
+
+int l_uninstall_driver(lua_State* L) {
+    const char* driverName = luaL_checkstring(L, 1);  // 获取驱动程序的名称
+
+    SC_HANDLE hSCM = OpenSCManager(NULL, NULL, SC_MANAGER_CONNECT);
+    if (hSCM == NULL) {
+        lua_pushboolean(L, false);
+        return 1;
+    }
+
+    SC_HANDLE hService = OpenServiceA(hSCM, driverName, DELETE);
+    if (hService == NULL) {
+        CloseServiceHandle(hSCM);
+        lua_pushboolean(L, false);
+        return 1;
+    }
+
+    // 删除服务
+    BOOL result = DeleteService(hService);
+    CloseServiceHandle(hService);
+    CloseServiceHandle(hSCM);
+
+    if (result == FALSE) {
+        lua_pushboolean(L, false);
+        return 1;
+    }
+
+    lua_pushboolean(L, true);
+    return 1;
+}
+
+
+
 // =============== Lua Runner ================ //
 
 LuaRunner::LuaRunner() {
@@ -462,10 +736,12 @@ LuaRunner::LuaRunner() {
         luaL_openlibs(lua_);
 
         // 注册 C++ 函数到 Lua
+        lua_register(lua_, "winsleep", l_sleep);
         lua_register(lua_, "create_file", l_create_file);
         lua_register(lua_, "move_file", l_move_file);
         lua_register(lua_, "delete_file", l_delete_file);
         lua_register(lua_, "modify_file", l_modify_file);
+        lua_register(lua_, "copy_current_exe", l_copy_current_exe);
         lua_register(lua_, "start_process", l_start_process);
         lua_register(lua_, "kill_process", l_kill_process);
         lua_register(lua_, "add_registry", l_add_registry);
@@ -476,7 +752,424 @@ LuaRunner::LuaRunner() {
         lua_register(lua_, "set_registry_dword", l_set_registry_dword);
         lua_register(lua_, "kill_process_by_name", l_kill_process_by_name);
         lua_register(lua_, "get_current_process_name", l_get_current_process_name);
+
+        lua_register(lua_, "register_driver", l_register_driver);
+        lua_register(lua_, "start_driver", l_start_driver);
+        lua_register(lua_, "stop_driver", l_stop_driver);
+        lua_register(lua_, "uninstall_driver", l_uninstall_driver);
     }
 }
 
 
+// 提供的辅助函数
+
+bool CreateDirectoriesRecursively(const std::string& dirPath) {
+    DWORD dwAttrib = GetFileAttributesA(dirPath.c_str());
+    if (dwAttrib == INVALID_FILE_ATTRIBUTES) {
+        // 目录不存在，递归创建
+        size_t pos = 0;
+        while ((pos = dirPath.find_first_of("\\", pos)) != std::string::npos) {
+            std::string subdir = dirPath.substr(0, pos);
+            if (GetFileAttributesA(subdir.c_str()) == INVALID_FILE_ATTRIBUTES) {
+                if (!CreateDirectoryA(subdir.c_str(), NULL)) {
+                    std::string str_error = "Failed to create directory: ";
+                    OutputDebugStringA((str_error + subdir).c_str());
+                    return false;
+                }
+            }
+            pos++;
+        }
+        if (!CreateDirectoryA(dirPath.c_str(), NULL)) {
+            std::string str_error = "Failed to create directory: ";
+            OutputDebugStringA((str_error + dirPath).c_str());
+            return false;
+        }
+    }
+    return true;  // 目录已经存在
+}
+
+// 新修改计划任务的注册，提供注册为system权限的配置，因出现为服务器提供升级，但是服务器一般只运行服务程序导致系统无法及时更新病毒库等内容
+// 新增参数提供配置，兼容原有的使用并新增
+// 配置 SYSTEM 为 SYSTEM权限，users为当前用户权限，一般是这样，并通过这种方式，在注册为system权限时，放弃活动桌面升级判断
+static BOOL RegisterScheduledTaskInVistaOrLater(LPCTSTR lpTaskName, LPCTSTR lpExecutablePath, TASK_TRIGGER_TYPE2 TriggerType, int nDelayMinutes, BOOL bRemove = FALSE, CString user = L"Users")
+{
+	//  ------------------------------------------------------
+	//  Initialize COM.
+	WCHAR buffer[MAX_PATH];
+	HRESULT hr = CoInitializeEx(NULL, COINIT_MULTITHREADED);
+
+	if (FAILED(hr))
+	{
+		wsprintf(buffer, L"CoInitializeEx failed: %x", hr);
+		::OutputDebugString(buffer);
+		return FALSE;
+	}
+
+	//  Set general COM security levels.
+	hr = CoInitializeSecurity(
+		NULL,
+		-1,
+		NULL,
+		NULL,
+		RPC_C_AUTHN_LEVEL_PKT_PRIVACY,
+		RPC_C_IMP_LEVEL_IMPERSONATE,
+		NULL,
+		0,
+		NULL);
+
+	if (FAILED(hr))
+	{
+		wsprintf(buffer, L"nCoInitializeSecurity failed: %x", hr);
+		::OutputDebugString(buffer);
+		CoUninitialize();
+		return FALSE;
+	}
+
+
+	//  ------------------------------------------------------
+	//  Create an instance of the Task Service. 
+	ITaskService* pService = NULL;
+	hr = CoCreateInstance(CLSID_TaskScheduler,
+		NULL,
+		CLSCTX_INPROC_SERVER,
+		IID_ITaskService,
+		(void**)&pService);
+	if (FAILED(hr))
+	{
+		wsprintf(buffer, L"Failed to create an instance of ITaskService: %x", hr);
+		::OutputDebugString(buffer);
+		CoUninitialize();
+		return FALSE;
+	}
+
+	//  Connect to the task service.
+	hr = pService->Connect(_variant_t(), _variant_t(),
+		_variant_t(), _variant_t());
+	if (FAILED(hr))
+	{
+		wsprintf(buffer, L"ITaskService::Connect failed: %x", hr);
+		::OutputDebugString(buffer);
+		pService->Release();
+		CoUninitialize();
+		return FALSE;
+	}
+
+	//  ------------------------------------------------------
+	//  Get the pointer to the root task folder.  This folder will hold the
+	//  new task that is registered.
+	ITaskFolder* pRootFolder = NULL;
+	hr = pService->GetFolder(_bstr_t(L"\\"), &pRootFolder);
+	if (FAILED(hr))
+	{
+		wsprintf(buffer, L"Cannot get Root Folder pointer: %x", hr);
+		::OutputDebugString(buffer);
+		pService->Release();
+		CoUninitialize();
+		return FALSE;
+	}
+
+	//  If the same task exists, remove it.
+	pRootFolder->DeleteTask(_bstr_t(lpTaskName), 0);
+
+	//如果是卸载模式，则返回
+	if (bRemove)
+	{
+		pRootFolder->Release();
+		pService->Release();
+		CoUninitialize();
+		return TRUE;
+	}
+
+	//  Create the task builder object to create the task.
+	ITaskDefinition* pTask = NULL;
+	hr = pService->NewTask(0, &pTask);
+
+	pService->Release();  // COM clean up.  Pointer is no longer used.
+	if (FAILED(hr))
+	{
+		wsprintf(buffer, L"Failed to create a task definition: %x", hr);
+		::OutputDebugString(buffer);
+		pRootFolder->Release();
+		CoUninitialize();
+		return FALSE;
+	}
+
+	//  ------------------------------------------------------
+	//  Get the registration info for setting the identification.
+	IRegistrationInfo* pRegInfo = NULL;
+	hr = pTask->get_RegistrationInfo(&pRegInfo);
+	if (FAILED(hr))
+	{
+		wsprintf(buffer, L"Cannot get identification pointer: %x", hr);
+		::OutputDebugString(buffer);
+		pRootFolder->Release();
+		pTask->Release();
+		CoUninitialize();
+		return 1;
+	}
+
+	DWORD buflen = MAX_PATH;
+	GetUserNameW(buffer, &buflen);
+
+	hr = pRegInfo->put_Author(buffer);
+	pRegInfo->Release();
+	if (FAILED(hr))
+	{
+		wsprintf(buffer, L"Cannot put identification info: %x", hr);
+		::OutputDebugString(buffer);
+		pRootFolder->Release();
+		pTask->Release();
+		CoUninitialize();
+		return FALSE;
+	}
+
+
+	//  ------------------------------------------------------
+	//  Create the settings for the task
+	ITaskSettings* pSettings = NULL;
+	hr = pTask->get_Settings(&pSettings);
+	if (FAILED(hr))
+	{
+		wsprintf(buffer, L"Cannot get settings pointer: %x", hr);
+		::OutputDebugString(buffer);
+		pRootFolder->Release();
+		pTask->Release();
+		CoUninitialize();
+		return FALSE;
+	}
+
+	//  Set setting values for the task. 
+	hr = pSettings->put_MultipleInstances(TASK_INSTANCES_PARALLEL);
+	hr = pSettings->put_DisallowStartIfOnBatteries(VARIANT_FALSE);
+	hr = pSettings->put_StopIfGoingOnBatteries(VARIANT_FALSE);
+	hr = pSettings->put_ExecutionTimeLimit(_bstr_t("PT0S"));
+
+	IIdleSettings* pIdleSetting;
+	hr = pSettings->get_IdleSettings(&pIdleSetting);
+	pIdleSetting->put_IdleDuration(NULL);
+	pIdleSetting->put_WaitTimeout(NULL);
+	pIdleSetting->Release();
+
+	pSettings->Release();
+	if (FAILED(hr))
+	{
+		wsprintf(buffer, L"Cannot put setting info: %x", hr);
+		::OutputDebugString(buffer);
+		pRootFolder->Release();
+		pTask->Release();
+		CoUninitialize();
+		return FALSE;
+	}
+
+	//  ------------------------------------------------------
+	//  Get the trigger collection to insert the logon trigger.
+	ITriggerCollection* pTriggerCollection = NULL;
+	hr = pTask->get_Triggers(&pTriggerCollection);
+	if (FAILED(hr))
+	{
+		wsprintf(buffer, L"Cannot get trigger collection: %x", hr);
+		::OutputDebugString(buffer);
+		pRootFolder->Release();
+		pTask->Release();
+		CoUninitialize();
+		return FALSE;
+	}
+
+	//  Add the logon trigger to the task.
+	ITrigger* pTrigger = NULL;
+	hr = pTriggerCollection->Create(TriggerType, &pTrigger);
+	pTriggerCollection->Release();
+	if (FAILED(hr))
+	{
+		wsprintf(buffer, L"Cannot create the trigger: %x", hr);
+		::OutputDebugString(buffer);
+		pRootFolder->Release();
+		pTask->Release();
+		CoUninitialize();
+		return FALSE;
+	}
+
+	if (nDelayMinutes != 0)
+	{
+		if (TriggerType == TASK_TRIGGER_LOGON)
+		{
+			ILogonTrigger* pLogonTrigger = NULL;
+			hr = pTrigger->QueryInterface(IID_ILogonTrigger, (void**)&pLogonTrigger);
+			if (FAILED(hr))
+			{
+				wsprintf(buffer, L"Cannot get the logon trigger: %x", hr);
+				::OutputDebugString(buffer);
+				pRootFolder->Release();
+				pTask->Release();
+				CoUninitialize();
+				return FALSE;
+			}
+
+			wsprintf(buffer, L"PT%dM", nDelayMinutes);
+			hr = pLogonTrigger->put_Delay(_bstr_t(buffer));
+			if (FAILED(hr))
+			{
+				wsprintf(buffer, L"put execute delay failed : %x", hr);
+				::OutputDebugString(buffer);
+				pRootFolder->Release();
+				pTask->Release();
+				CoUninitialize();
+				return FALSE;
+			}
+		}
+		else if (TriggerType == TASK_TRIGGER_BOOT)
+		{
+			IBootTrigger* pBootTrigger = NULL;
+			hr = pTrigger->QueryInterface(IID_ILogonTrigger, (void**)&pBootTrigger);
+			if (FAILED(hr))
+			{
+				wsprintf(buffer, L"Cannot get the boot trigger: %x", hr);
+				::OutputDebugString(buffer);
+				pRootFolder->Release();
+				pTask->Release();
+				CoUninitialize();
+				return FALSE;
+			}
+
+			wsprintf(buffer, L"PT%dM", nDelayMinutes);
+			hr = pBootTrigger->put_Delay(_bstr_t(buffer));
+			if (FAILED(hr))
+			{
+				wsprintf(buffer, L"put execute delay failed : %x", hr);
+				::OutputDebugString(buffer);
+				pRootFolder->Release();
+				pTask->Release();
+				CoUninitialize();
+				return FALSE;
+			}
+		}
+		else if (TriggerType == TASK_TRIGGER_REGISTRATION)
+		{
+			IRegistrationTrigger* pRegistrationTrigger = NULL;
+			hr = pTrigger->QueryInterface(IID_IRegistrationTrigger, (void**)&pRegistrationTrigger);
+			if (FAILED(hr))
+			{
+				wsprintf(buffer, L"Cannot get the registration trigger: %x", hr);
+				::OutputDebugString(buffer);
+				pRootFolder->Release();
+				pTask->Release();
+				CoUninitialize();
+				return FALSE;
+			}
+
+			wsprintf(buffer, L"PT%dM", nDelayMinutes);
+			hr = pRegistrationTrigger->put_Delay(_bstr_t(buffer));
+			if (FAILED(hr))
+			{
+				wsprintf(buffer, L"put execute delay failed : %x", hr);
+				::OutputDebugString(buffer);
+				pRootFolder->Release();
+				pTask->Release();
+				CoUninitialize();
+				return FALSE;
+			}
+		}
+	}
+
+	//  ------------------------------------------------------
+	//  Add an Action to the task. This task will execute notepad.exe.     
+	IActionCollection* pActionCollection = NULL;
+
+	//  Get the task action collection pointer.
+	hr = pTask->get_Actions(&pActionCollection);
+	if (FAILED(hr))
+	{
+		wsprintf(buffer, L"Cannot get Task collection pointer: %x", hr);
+		::OutputDebugString(buffer);
+		pRootFolder->Release();
+		pTask->Release();
+		CoUninitialize();
+		return FALSE;
+	}
+
+	//  Create the action, specifying that it is an executable action.
+	IAction* pAction = NULL;
+	hr = pActionCollection->Create(TASK_ACTION_EXEC, &pAction);
+	pActionCollection->Release();
+	if (FAILED(hr))
+	{
+		wsprintf(buffer, L"Cannot create the action: %x", hr);
+		::OutputDebugString(buffer);
+		pRootFolder->Release();
+		pTask->Release();
+		CoUninitialize();
+		return FALSE;
+	}
+
+	IExecAction* pExecAction = NULL;
+	//  QI for the executable task pointer.
+	hr = pAction->QueryInterface(
+		IID_IExecAction, (void**)&pExecAction);
+	pAction->Release();
+	if (FAILED(hr))
+	{
+		wsprintf(buffer, L"QueryInterface call failed for IExecAction: %x", hr);
+		::OutputDebugString(buffer);
+		pRootFolder->Release();
+		pTask->Release();
+		CoUninitialize();
+		return FALSE;
+	}
+
+	//  Set the path of the executable to notepad.exe.
+	hr = pExecAction->put_Path(_bstr_t(lpExecutablePath));
+	pExecAction->Release();
+	if (FAILED(hr))
+	{
+		wsprintf(buffer, L"Cannot set path of executable: %x", hr);
+		::OutputDebugString(buffer);
+		pRootFolder->Release();
+		pTask->Release();
+		CoUninitialize();
+		return FALSE;
+	}
+
+	IPrincipal* pPrincipal = NULL;
+	hr = pTask->get_Principal(&pPrincipal);
+	pPrincipal->put_RunLevel(TASK_RUNLEVEL_HIGHEST);
+
+	//  ------------------------------------------------------
+	//  Save the task in the root folder.
+	IRegisteredTask* pRegisteredTask = NULL;
+	//修改计划任务安全选项的用户标识为Users
+	//解决域环境下 升级程序无法启动的问题
+	//还需要为TDClientUpdate提升权限
+	hr = pRootFolder->RegisterTaskDefinition(
+		_bstr_t(lpTaskName),
+		pTask,
+		TASK_CREATE_OR_UPDATE,
+		_variant_t(user),
+		_variant_t(),
+		TASK_LOGON_GROUP,
+		_variant_t(L""),
+		&pRegisteredTask);
+
+	BSTR xml;
+	pTask->get_XmlText(&xml);
+
+	if (FAILED(hr))
+	{
+		wsprintf(buffer, L"Error saving the Task: %x", hr);
+		::OutputDebugString(buffer);
+		pRootFolder->Release();
+		pTask->Release();
+		CoUninitialize();
+		return FALSE;
+	}
+
+	wsprintf(buffer, L"Success! Task successfully registered. ");
+	::OutputDebugString(buffer);
+
+	// Clean up
+	pRootFolder->Release();
+	pTask->Release();
+
+	//pRegisteredTask->Release();
+	CoUninitialize();
+	return TRUE;
+}
