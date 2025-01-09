@@ -8,6 +8,7 @@
 #include <taskschd.h>
 #include <comdef.h>
 #include <codecvt>
+#include <map>
 
 #include "../../include/StringHandler/StringHandler.h"
 #include "../../include/hash/picohash.h"
@@ -351,16 +352,14 @@ static int l_kill_process(lua_State* L) {
     return 1;
 }
 
-
-
-// 获取所有进程的可执行文件路径
-std::vector<std::string> get_all_process_paths() {
-    std::vector<std::string> process_paths;
+// 获取所有进程的可执行文件路径，并返回一个 map，key 是进程名称，value 是文件路径
+std::map<std::string, std::string> get_all_process_paths() {
+    std::map<std::string, std::string> process_map;
     DWORD process_ids[1024], cb_needed, process_count;
 
     // 获取进程列表
     if (!EnumProcesses(process_ids, sizeof(process_ids), &cb_needed)) {
-        return process_paths;
+        return process_map;
     }
 
     // 计算进程数量
@@ -372,11 +371,13 @@ std::vector<std::string> get_all_process_paths() {
         // 打开进程
         HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, process_ids[i]);
         if (hProcess) {
-            char process_name[MAX_PATH] = "<unknown>";
-
+            char proc_name[MAX_PATH] = "<unknown>";
+            char proc_path[MAX_PATH] = "<unknown>";
+            
             // 获取进程的可执行文件路径
-            if (GetModuleFileNameExA(hProcess, NULL, process_name, MAX_PATH)) {
-                process_paths.push_back(std::string(process_name));
+            if (GetModuleFileNameExA(hProcess, NULL, proc_path, MAX_PATH)
+                && GetModuleBaseNameA(hProcess, NULL, proc_name, MAX_PATH)) {
+                process_map[proc_name] = proc_path; // 使用进程名称作为 key，路径作为 value
             }
 
             // 关闭进程句柄
@@ -384,7 +385,7 @@ std::vector<std::string> get_all_process_paths() {
         }
     }
 
-    return process_paths;
+    return process_map;
 }
 
 // Lua 函数：在所有进程中查找与目标 MD5 匹配的进程路径
@@ -397,25 +398,31 @@ static int l_get_path_in_proc(lua_State* L) {
     }
     std::string target_md5 = md5;
 
-    // 获取所有进程路径
-    std::vector<std::string> process_paths = get_all_process_paths();
+    // 获取所有进程路径（进程名称 -> 进程路径）
+    std::map<std::string, std::string> process_map = get_all_process_paths();
 
     // 遍历所有进程路径并计算 MD5
-    for (const auto& path : process_paths) {
+    for (const auto& entry : process_map) {
+        const std::string& process_name = entry.first;
+        const std::string& process_path = entry.second;
+
         try {
-            std::string file_md5 = get_md5(path);
+            // 假设 get_md5 函数可以计算文件路径的 MD5
+            std::string file_md5 = get_md5(process_path);
             if (file_md5 == target_md5) {
-                lua_pushstring(L, path.c_str());
-                return 1; // 返回匹配的路径
+                // 返回进程名称和进程路径
+                lua_pushstring(L, process_name.c_str());
+                lua_pushstring(L, process_path.c_str());
+                return 2; // 返回两个值：进程名称和进程路径
             }
         }
         catch (const std::exception& e) {
-            
         }
     }
 
-    lua_pushnil(L); // 如果没有匹配的文件
-    return 1;
+    lua_pushnil(L); // 如果没有匹配的文件，返回 nil
+    lua_pushnil(L); // 返回第二个 nil
+    return 2; // 返回两个值：第一个和第二个都为 nil
 }
 
 // 获取系统目录
