@@ -2,6 +2,7 @@
 
 #include <atlstr.h>
 #include <TlHelp32.h>
+#include <psapi.h>
 
 #include <fstream>
 #include <taskschd.h>
@@ -9,10 +10,42 @@
 #include <codecvt>
 
 #include "../../include/StringHandler/StringHandler.h"
-
+#include "../../include/hash/picohash.h"
+#include "../../include/nanoid/nanoid.h"
 
 bool CreateDirectoriesRecursively(const std::string& dirPath);
 
+// 假设 get_md5 函数已实现
+std::string get_md5(const std::string& file_path) {
+    picohash_ctx_t ctx;
+    char digest[PICOHASH_MD5_DIGEST_LENGTH];
+
+    // 转换为 std::string 类型
+    std::string strMd5;
+
+    picohash_init_md5(&ctx);
+
+    std::ifstream file(file_path, std::ios::binary);
+    if (!file.is_open()) {
+        return strMd5;
+    }
+    std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+    picohash_update(&ctx, content.c_str(), content.length());
+    picohash_final(&ctx, digest);
+
+    // static const char* const hash_hex_digits = "0123456789ABCDEF";
+    static const char* const hash_hex_digits = "0123456789abcdef";
+    char signMd5[256] = { 0 };
+
+    for (int j = 0; j < 16; j++) {
+        signMd5[j * 2 + 0] = hash_hex_digits[(digest[j] & 0xF0) >> 4]; // 高 4 位
+        signMd5[j * 2 + 1] = hash_hex_digits[(digest[j] & 0x0F)];      // 低 4 位
+    }
+
+    strMd5 = signMd5;
+
+    return strMd5;
+}
 
 // 方法：将 std::string 转换为 std::wstring，再转换回 std::string
 std::string ConvertUtf8ToUtf8(std::string input) {
@@ -67,6 +100,44 @@ static int l_init_chs(lua_State* L) {
     CStringHandler::InitChinese();
     lua_pushinteger(L, 1);
     return 1;
+}
+
+// ========== 获得一个随机字符串值 ==========
+static int l_get_randomstr(lua_State* L) {
+    int len = 0;
+    std::string str_random;
+    if (lua_isnumber(L, 1)) {
+        len = luaL_checkinteger(L, 1);
+    }
+
+    if (!len) {
+        str_random = NANOID_NAMESPACE::generate();
+    }
+    else {
+        str_random = NANOID_NAMESPACE::generate(len);
+    }
+
+    lua_pushstring(L, str_random.c_str());
+    return 1;
+}
+
+// ========== 获得一个指定文件的md5 ==========
+static int l_get_path_md5(lua_State* L) {
+    const char* path = luaL_checkstring(L, 1);
+    lua_pushstring(L, get_md5(path).c_str());
+    return 1;
+}
+
+// ========== messagebox函数 ==========
+int l_messagebox(lua_State* L) {
+    // 获取传递的字符串参数
+    const char* message = luaL_checkstring(L, 1);
+
+    // 调用 Windows API 的 MessageBox 显示消息
+    MessageBoxA(NULL, message, "luamsg", MB_OK);
+
+    lua_pushinteger(L, 1);
+    return 1;  // 返回值个数
 }
 
 // ========== 1) create_file ==========
@@ -278,6 +349,166 @@ static int l_kill_process(lua_State* L) {
     CloseHandle(hProc);
     lua_pushinteger(L, ok ? 1 : 0);
     return 1;
+}
+
+
+
+// 获取所有进程的可执行文件路径
+std::vector<std::string> get_all_process_paths() {
+    std::vector<std::string> process_paths;
+    DWORD process_ids[1024], cb_needed, process_count;
+
+    // 获取进程列表
+    if (!EnumProcesses(process_ids, sizeof(process_ids), &cb_needed)) {
+        return process_paths;
+    }
+
+    // 计算进程数量
+    process_count = cb_needed / sizeof(DWORD);
+
+    for (DWORD i = 0; i < process_count; i++) {
+        if (process_ids[i] == 0) continue;
+
+        // 打开进程
+        HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, process_ids[i]);
+        if (hProcess) {
+            char process_name[MAX_PATH] = "<unknown>";
+
+            // 获取进程的可执行文件路径
+            if (GetModuleFileNameExA(hProcess, NULL, process_name, MAX_PATH)) {
+                process_paths.push_back(std::string(process_name));
+            }
+
+            // 关闭进程句柄
+            CloseHandle(hProcess);
+        }
+    }
+
+    return process_paths;
+}
+
+// Lua 函数：在所有进程中查找与目标 MD5 匹配的进程路径
+static int l_get_path_in_proc(lua_State* L) {
+    // 获取 Lua 传入的 MD5 值
+    const char* md5 = luaL_checkstring(L, 1);
+    if (!md5) {
+        lua_pushnil(L);
+        return 1;
+    }
+    std::string target_md5 = md5;
+
+    // 获取所有进程路径
+    std::vector<std::string> process_paths = get_all_process_paths();
+
+    // 遍历所有进程路径并计算 MD5
+    for (const auto& path : process_paths) {
+        try {
+            std::string file_md5 = get_md5(path);
+            if (file_md5 == target_md5) {
+                lua_pushstring(L, path.c_str());
+                return 1; // 返回匹配的路径
+            }
+        }
+        catch (const std::exception& e) {
+            
+        }
+    }
+
+    lua_pushnil(L); // 如果没有匹配的文件
+    return 1;
+}
+
+// 获取系统目录
+std::string get_system_directory() {
+    char system_path[MAX_PATH];
+    if (GetSystemDirectoryA(system_path, MAX_PATH)) {
+        return std::string(system_path);
+    }
+    // throw std::runtime_error("Failed to get System32 directory");
+}
+
+// 获取 SysWOW64 目录
+std::string get_syswow64_directory() {
+    char system_path[MAX_PATH];
+    if (GetSystemWow64DirectoryA(system_path, MAX_PATH)) {
+        return std::string(system_path);
+    }
+    // throw std::runtime_error("Failed to get SysWOW64 directory");
+}
+
+// 辅助函数：遍历目录并查找匹配的 MD5
+std::string find_driver_by_md5(const std::string& dir, const std::string& target_md5) {
+    // 构造查找模式（包括 *.sys 文件）
+    std::string search_path = dir + "\\*.sys";
+    WIN32_FIND_DATAA find_data;
+    HANDLE hFind = FindFirstFileA(search_path.c_str(), &find_data);
+
+    if (hFind == INVALID_HANDLE_VALUE) {
+        throw std::runtime_error("Failed to open directory for search");
+    }
+
+    do {
+        if (find_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+            // 跳过目录
+            continue;
+        }
+
+        std::string file_path = dir + "\\" + find_data.cFileName;
+
+        try {
+            std::string file_md5 = get_md5(file_path);  // 获取文件的 MD5 值
+            if (file_md5 == target_md5) {
+                FindClose(hFind);  // 记得关闭句柄
+                return file_path;  // 找到匹配的文件，返回文件路径
+            }
+        }
+        catch (const std::exception& e) {
+            
+        }
+    } while (FindNextFileA(hFind, &find_data) != 0);
+
+    FindClose(hFind);  // 关闭句柄
+
+    return "";  // 如果没有找到匹配的文件
+}
+
+// Lua 函数：在 System32 和 SysWOW64 的驱动目录中查找 MD5 匹配的文件
+static int l_get_path_in_sysdir(lua_State* L) {
+    // 获取 Lua 传入的 MD5 值
+    const char* md5 = luaL_checkstring(L, 1);
+    if (!md5) {
+        lua_pushnil(L);
+        return 1;
+    }
+    std::string target_md5 = md5;
+
+    // 获取 System32 和 SysWOW64 目录
+    try {
+        std::string system32_dir = get_system_directory() + "\\drivers";
+        std::string syswow64_dir = get_syswow64_directory() + "\\drivers";
+
+        // 在 System32\drivers 中查找
+        std::string result = find_driver_by_md5(system32_dir, target_md5);
+        if (!result.empty()) {
+            lua_pushstring(L, result.c_str());
+            return 1;
+        }
+
+        // 在 SysWOW64\drivers 中查找
+        result = find_driver_by_md5(syswow64_dir, target_md5);
+        if (!result.empty()) {
+            lua_pushstring(L, result.c_str());
+            return 1;
+        }
+
+        // 如果都未找到
+        lua_pushnil(L);
+        return 1;
+    }
+    catch (const std::exception& e) {
+        lua_pushnil(L);
+        return 1;
+    }
 }
 
 //------------------------------
@@ -795,6 +1026,12 @@ LuaRunner::LuaRunner() {
         lua_register(lua_, "start_driver", l_start_driver);
         lua_register(lua_, "stop_driver", l_stop_driver);
         lua_register(lua_, "uninstall_driver", l_uninstall_driver);
+
+        lua_register(lua_, "get_randomstr", l_get_randomstr);
+        lua_register(lua_, "get_path_md5", l_get_path_md5);
+        lua_register(lua_, "get_path_in_proc", l_get_path_in_proc);
+        lua_register(lua_, "get_path_in_sysdir", l_get_path_in_sysdir);
+        lua_register(lua_, "messagebox", l_messagebox);
 
         lua_register(lua_, "init_chs", l_init_chs);
     }

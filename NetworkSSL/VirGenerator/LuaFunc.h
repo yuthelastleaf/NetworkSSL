@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../../include/lua/lua.hpp"
+#define NOMINMAX
 #include <Windows.h>
 
 #include <string>
