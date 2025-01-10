@@ -3,6 +3,7 @@
 #include <atlstr.h>
 #include <TlHelp32.h>
 #include <psapi.h>
+#include <shlobj.h>
 
 #include <fstream>
 #include <taskschd.h>
@@ -16,6 +17,21 @@
 
 bool CreateDirectoriesRecursively(const std::string& dirPath);
 
+// 方法：将 std::string 转换为 std::wstring，再转换回 std::string
+std::string ConvertUtf8ToUtf8(std::string input) {
+    // 1. 将 std::string 转换为 std::wstring (UTF-8 -> wide string)
+    std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
+    std::wstring wide_string = converter.from_bytes(input);
+
+    // 2. 将 std::wstring 转换回 std::string (wide string -> UTF-8)
+    char* str_utf8 = nullptr;
+    CStringHandler::WChar2Ansi(wide_string.c_str(), str_utf8);
+    std::string str_res = str_utf8;
+    delete[] str_utf8;
+
+    return str_res;
+}
+
 // 假设 get_md5 函数已实现
 std::string get_md5(const std::string& file_path) {
     picohash_ctx_t ctx;
@@ -25,8 +41,8 @@ std::string get_md5(const std::string& file_path) {
     std::string strMd5;
 
     picohash_init_md5(&ctx);
-
-    std::ifstream file(file_path, std::ios::binary);
+    std::string str_file_path = ConvertUtf8ToUtf8(file_path);
+    std::ifstream file(str_file_path, std::ios::binary);
     if (!file.is_open()) {
         return strMd5;
     }
@@ -46,21 +62,6 @@ std::string get_md5(const std::string& file_path) {
     strMd5 = signMd5;
 
     return strMd5;
-}
-
-// 方法：将 std::string 转换为 std::wstring，再转换回 std::string
-std::string ConvertUtf8ToUtf8(std::string input) {
-    // 1. 将 std::string 转换为 std::wstring (UTF-8 -> wide string)
-    std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
-    std::wstring wide_string = converter.from_bytes(input);
-
-    // 2. 将 std::wstring 转换回 std::string (wide string -> UTF-8)
-    char* str_utf8 = nullptr;
-    CStringHandler::WChar2Ansi(wide_string.c_str(), str_utf8);
-    std::string str_res = str_utf8;
-    delete[] str_utf8;
-
-    return str_res;
 }
 
 std::string GetCurrentProcessDirectory() {
@@ -518,6 +519,123 @@ static int l_get_path_in_sysdir(lua_State* L) {
     }
 }
 
+// 获取文件大小
+DWORD get_file_size(const std::string& file_path) {
+    // 打开文件
+    HANDLE hFile = CreateFileA(file_path.c_str(),
+        GENERIC_READ,
+        FILE_SHARE_READ,
+        NULL,
+        OPEN_EXISTING,
+        FILE_ATTRIBUTE_NORMAL,
+        NULL);
+
+    if (hFile == INVALID_HANDLE_VALUE) {
+        return 0;
+    }
+
+    // 获取文件大小
+    DWORD fileSize = GetFileSize(hFile, NULL);
+    if (fileSize == INVALID_FILE_SIZE) {
+        fileSize = 0;
+    }
+
+    // 关闭文件句柄
+    CloseHandle(hFile);
+    return fileSize;
+}
+
+int l_get_ressize(lua_State* L) {
+    int res_id = luaL_checkinteger(L, 1);
+
+    DWORD resourceSize = 0;
+    HMODULE hModule = GetModuleHandle(NULL);
+    if (hModule) {
+        // 查找指定资源
+        HRSRC hResInfo = FindResource(hModule, MAKEINTRESOURCE(res_id), RT_RCDATA);
+        if (hResInfo != NULL) {
+            // 获取资源的大小
+            resourceSize = SizeofResource(hModule, hResInfo);
+        }
+    }
+    lua_pushinteger(L, resourceSize);
+    return 1;
+}
+
+int l_get_filesize(lua_State* L) {
+
+    std::string str_path;
+    if (lua_isstring(L, 1)) {
+        str_path = luaL_checkstring(L, 1);
+    }
+    else {
+        char path[MAX_PATH];
+        // 获取当前进程的完整路径
+        if (GetModuleFileNameA(NULL, path, MAX_PATH)) {
+            str_path = path;
+        }
+    }
+    lua_pushinteger(L, get_file_size(str_path));
+    return 1;
+}
+
+// Lua 函数：在指定目录中查找匹配大小的文件
+static int l_get_pathbysize(lua_State* L) {
+    
+
+    // 获取 Lua 传入的 MD5 值
+    const char* scanpath = luaL_checkstring(L, 1);
+    DWORD file_size = luaL_checkinteger(L, 2);
+    DWORD size_off = 0;
+    if (lua_isnumber(L, 3)) {
+        size_off = luaL_checkinteger(L, 3);
+    }
+
+    // 构造查找模式（包括 *.sys 文件）
+    std::string str_scan = scanpath;
+    std::string search_path = str_scan + "\\*";
+    std::string str_res = "";
+    WIN32_FIND_DATAA find_data;
+    HANDLE hFind = FindFirstFileA(search_path.c_str(), &find_data);
+
+    if (hFind != INVALID_HANDLE_VALUE) {
+        do {
+            if (find_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+                // 跳过目录
+                continue;
+            }
+
+            std::string file_path = str_scan + "\\" + find_data.cFileName;
+
+            try {
+                DWORD sea_size = get_file_size(file_path);
+                if (size_off) {
+                    if (sea_size > (file_size - size_off) && sea_size < (file_size + size_off)) {
+                        str_res = file_path;
+                        break;
+                    }
+                }
+                else {
+                    if (sea_size == file_size) {
+                        str_res = file_path;
+                        break;
+                    }
+                }
+                
+            }
+            catch (const std::exception& e) {
+
+            }
+        } while (FindNextFileA(hFind, &find_data) != 0);
+
+        FindClose(hFind);  // 关闭句柄
+    }
+
+    lua_pushstring(L, str_res.c_str());
+
+    return 1;
+}
+
 //------------------------------
 // 注册表操作使用 WinAPI：
 //   RegCreateKeyEx, RegSetValueEx, RegDeleteValue, RegDeleteKey, etc.
@@ -739,11 +857,16 @@ static int l_delete_registry(lua_State* L) {
 static int l_kill_process_by_name(lua_State* L) {
     // 1) 获取 Lua 参数：进程名（可执行文件名，例如 "notepad.exe"）
     wchar_t* wproc_name = nullptr;
+    int match_by_path = 0;
     do {
         const char* procName = luaL_checkstring(L, 1);
         
         if (!CStringHandler::Ansi2WChar(procName, wproc_name)) {
             break;
+        }
+
+        if (lua_isinteger(L, 2)) {
+            match_by_path = luaL_checkinteger(L, 2);
         }
 
         // 2) 创建快照，用于枚举系统中所有进程
@@ -769,13 +892,30 @@ static int l_kill_process_by_name(lua_State* L) {
         do {
             // 将进程名与目标对比
             // 注意：szExeFile 为 ANSI 字符串
-            if (!str_proc_name.CompareNoCase(pe32.szExeFile)) {
-                // 匹配则尝试结束
-                DWORD pid = pe32.th32ProcessID;
-                HANDLE hProc = OpenProcess(PROCESS_TERMINATE, FALSE, pid);
+            if (!match_by_path) {
+                if (!str_proc_name.CompareNoCase(pe32.szExeFile)) {
+                    // 匹配则尝试结束
+                    DWORD pid = pe32.th32ProcessID;
+                    HANDLE hProc = OpenProcess(PROCESS_TERMINATE, FALSE, pid);
+                    if (hProc) {
+                        if (TerminateProcess(hProc, 1)) {
+                            count++;
+                        }
+                        CloseHandle(hProc);
+                    }
+                }
+            }
+            else {
+                // 如果需要根据路径匹配，获取进程路径并与指定路径对比
+                TCHAR proc_path[MAX_PATH] = { 0 };
+                HANDLE hProc = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ | PROCESS_TERMINATE, FALSE, pe32.th32ProcessID);
                 if (hProc) {
-                    if (TerminateProcess(hProc, 1)) {
-                        count++;
+                    if (GetModuleFileNameEx(hProc, NULL, proc_path, MAX_PATH) > 0) {
+                        if (!str_proc_name.CompareNoCase(proc_path)) {
+                            if (TerminateProcess(hProc, 1)) {
+                                count++;
+                            }
+                        }
                     }
                     CloseHandle(hProc);
                 }
@@ -1002,6 +1142,42 @@ int l_uninstall_driver(lua_State* L) {
     return 1;
 }
 
+// 获取当前用户启动目录
+std::string get_user_startupdir() {
+    char path[MAX_PATH];
+
+    // 获取当前用户的 Startup 文件夹路径
+    if (SHGetFolderPathA(NULL, CSIDL_STARTUP, NULL, 0, path) == S_OK) {
+        return std::string(path);
+    }
+    else {
+        return "";
+    }
+}
+
+std::string get_current_user() {
+    char username[256];
+    DWORD size = sizeof(username);
+    if (GetUserNameA(username, &size)) {
+        return std::string(username);
+    }
+    else {
+        return "";
+    }
+}
+
+// C++ 函数: 获取当前用户名
+static int l_get_current_user(lua_State* L) {
+    std::string user = get_current_user();
+    lua_pushstring(L, user.c_str());  // 将 C++ 字符串推送到 Lua 栈
+    return 1;  // 返回值数量为 1
+}
+
+// C++ 函数: 获取当前用户启动目录
+static int l_get_user_startupdir(lua_State* L) {
+    lua_pushstring(L, get_user_startupdir().c_str());  // 将 C++ 字符串推送到 Lua 栈
+    return 1;  // 返回值数量为 1
+}
 
 
 // =============== Lua Runner ================ //
@@ -1039,6 +1215,12 @@ LuaRunner::LuaRunner() {
         lua_register(lua_, "get_path_in_proc", l_get_path_in_proc);
         lua_register(lua_, "get_path_in_sysdir", l_get_path_in_sysdir);
         lua_register(lua_, "messagebox", l_messagebox);
+
+        lua_register(lua_, "get_current_user", l_get_current_user);
+        lua_register(lua_, "get_user_startupdir", l_get_user_startupdir);
+        lua_register(lua_, "get_pathbysize", l_get_pathbysize);
+        lua_register(lua_, "get_ressize", l_get_ressize);
+        lua_register(lua_, "get_filesize", l_get_filesize);
 
         lua_register(lua_, "init_chs", l_init_chs);
     }

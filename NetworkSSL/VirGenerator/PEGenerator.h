@@ -373,6 +373,21 @@ public:
     }
 
 
+    // 获取资源大小
+    DWORD GetRecSize(int resourceId) {
+        DWORD resourceSize = 0;
+        HMODULE hModule = GetModuleHandle(NULL);
+        if (hModule) {
+            // 查找指定资源
+            HRSRC hResInfo = FindResource(hModule, MAKEINTRESOURCE(resourceId), RT_RCDATA);
+            if (hResInfo != NULL) {
+                // 获取资源的大小
+                resourceSize = SizeofResource(hModule, hResInfo);
+            }
+        }
+        return resourceSize;
+    }
+
     // 获取当前进程的资源段基地址
     IMAGE_RESOURCE_DIRECTORY* GetCurrentProcessResourceDirectory() {
         HMODULE hModule = GetModuleHandle(NULL);

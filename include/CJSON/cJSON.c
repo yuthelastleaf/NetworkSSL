@@ -185,6 +185,10 @@ typedef struct internal_hooks
 #define CJSONTAG 'nsjc'
 #endif
 
+#ifndef MAX_JSON_LEN
+#define MAX_JSON_LEN 0x400
+#endif
+
 #include <wdm.h>  // kenerl mode header
 /* use windows kernel mode function to allocate memory */
 static void* CJSON_CDECL internal_malloc(size_t size)
@@ -207,6 +211,26 @@ static void* CJSON_CDECL internal_realloc(void* pointer, size_t size)
     }
     return new_ptr;
 }
+
+size_t internal_strlen(_In_z_ const char* _Str) {
+    size_t len = 0;
+    if (_Str) {
+        for (len = 0; len < MAX_JSON_LEN; len++) {
+            if (!_Str[len]) {
+                break;
+            }
+        }
+    }
+    return len;
+}
+
+char* internal_strcpy(char* dst, const char* src) {
+    size_t len = internal_strlen(src);
+    RtlCopyMemory(dst, src, len);
+    dst[len] = 0;
+    return dst;
+}
+
 #else
 /* work around MSVC error C2322: '...' address of dllimport '...' is not static */
 static void * CJSON_CDECL internal_malloc(size_t size)
@@ -221,6 +245,15 @@ static void * CJSON_CDECL internal_realloc(void *pointer, size_t size)
 {
     return realloc(pointer, size);
 }
+
+size_t internal_strlen(_In_z_ const char* _Str) {
+    return strlen(_Str);
+}
+
+char* internal_strcpy(char* dst, const char* src) {
+    return strcpy(dst, src);
+}
+
 #endif
 #else
 #define internal_malloc malloc
@@ -243,7 +276,7 @@ static unsigned char* cJSON_strdup(const unsigned char* string, const internal_h
         return NULL;
     }
 
-    length = strlen((const char*)string) + sizeof("");
+    length = internal_strlen((const char*)string) + sizeof("");
     copy = (unsigned char*)hooks->allocate(length);
     if (copy == NULL)
     {
@@ -604,9 +637,9 @@ CJSON_PUBLIC(char*) cJSON_SetValuestring(cJSON *object, const char *valuestring)
         v2_len = 0;
     }
     else {
-        v2_len = strlen(object->valuestring);
+        v2_len = internal_strlen(object->valuestring);
     }
-    v1_len = strlen(valuestring);
+    v1_len = internal_strlen(valuestring);
 
     if (v1_len <= v2_len)
     {
@@ -615,7 +648,7 @@ CJSON_PUBLIC(char*) cJSON_SetValuestring(cJSON *object, const char *valuestring)
         {
             return NULL;
         }
-        strcpy(object->valuestring, valuestring);
+        internal_strcpy(object->valuestring, valuestring);
         return object->valuestring;
     }
     copy = (char*) cJSON_strdup((const unsigned char*)valuestring, &global_hooks);
@@ -739,7 +772,7 @@ static void update_offset(printbuffer * const buffer)
     }
     buffer_pointer = buffer->buffer + buffer->offset;
 
-    buffer->offset += strlen((const char*)buffer_pointer);
+    buffer->offset += internal_strlen((const char*)buffer_pointer);
 }
 
 #ifdef _KERNEL_MODE
@@ -1147,7 +1180,7 @@ static cJSON_bool print_string_ptr(const unsigned char * const input, printbuffe
         {
             return false;
         }
-        strcpy((char*)output, "\"\"");
+        internal_strcpy((char*)output, "\"\"");
 
         return true;
     }
@@ -1312,7 +1345,7 @@ CJSON_PUBLIC(cJSON *) cJSON_ParseWithOpts(const char *value, const char **return
     }
 
     /* Adding null character size due to require_null_terminated. */
-    buffer_length = strlen(value) + sizeof("");
+    buffer_length = internal_strlen(value) + sizeof("");
 
     return cJSON_ParseWithLengthOpts(value, buffer_length, return_parse_end, require_null_terminated);
 }
@@ -1611,7 +1644,7 @@ static cJSON_bool print_value(const cJSON * const item, printbuffer * const outp
             {
                 return false;
             }
-            strcpy((char*)output, "null");
+            internal_strcpy((char*)output, "null");
             return true;
 
         case cJSON_False:
@@ -1620,7 +1653,7 @@ static cJSON_bool print_value(const cJSON * const item, printbuffer * const outp
             {
                 return false;
             }
-            strcpy((char*)output, "false");
+            internal_strcpy((char*)output, "false");
             return true;
 
         case cJSON_True:
@@ -1629,7 +1662,7 @@ static cJSON_bool print_value(const cJSON * const item, printbuffer * const outp
             {
                 return false;
             }
-            strcpy((char*)output, "true");
+            internal_strcpy((char*)output, "true");
             return true;
 
         case cJSON_Number:
@@ -1643,7 +1676,7 @@ static cJSON_bool print_value(const cJSON * const item, printbuffer * const outp
                 return false;
             }
 
-            raw_length = strlen(item->valuestring) + sizeof("");
+            raw_length = internal_strlen(item->valuestring) + sizeof("");
             output = ensure(output_buffer, raw_length);
             if (output == NULL)
             {

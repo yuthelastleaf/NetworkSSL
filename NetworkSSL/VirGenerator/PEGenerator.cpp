@@ -156,6 +156,7 @@ bool update_config(int config, HANDLE hUpdate, int rid)
 // 添加文件及资源到新的可执行文件
 BOOL AddFileToResource(LPCWSTR exePath, LPCWSTR resourceFilePath, LPCWSTR newExePath, CString lua_path, int config) {
     WCHAR tempFilePath[MAX_PATH];
+    wchar_t msg[512] = { 0 };
 
     // 创建临时文件路径
     GetTempPath(MAX_PATH, tempFilePath);
@@ -314,6 +315,7 @@ BOOL CALLBACK EnumLangsProc(HMODULE hModule, LPCWSTR lpType, LPCWSTR lpName, WOR
 // 添加文件及资源到新的可执行文件
 BOOL AddFileToResource32(LPCWSTR exePath, LPCWSTR resourceFilePath, LPCWSTR newExePath, CString lua_path, int config) {
     WCHAR tempFilePath[MAX_PATH];
+    char msg[512] = { 0 };
 
     // 创建临时文件路径
     GetTempPath(MAX_PATH, tempFilePath);
@@ -424,7 +426,8 @@ BOOL AddFileToResource32(LPCWSTR exePath, LPCWSTR resourceFilePath, LPCWSTR newE
 
     // 完成资源更新
     if (!EndUpdateResource(hUpdate, FALSE)) {
-        MessageBox(NULL, L"Failed to finalize resource update.", L"generator", MB_OK);
+        sprintf_s(msg, "Failed to finalize resource update. errcode : %d .", GetLastError());
+        MessageBoxA(NULL, msg, "generator", MB_OK);
         DeleteFile(tempFilePath); // 删除临时文件
         return FALSE;
     }
