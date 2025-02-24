@@ -463,6 +463,78 @@ BOOL DoRelocationTable(LPVOID lpBaseAddress)
 	return TRUE;
 }
 
+// 修改PE文件重定位表信息
+// lpBaseAddress: 内存DLL数据按SectionAlignment大小对齐映射到进程内存中的内存基址
+// 返回值: 成功返回TRUE，否则返回FALSE
+BOOL AddRelocationTable(LPVOID lpBaseAddress)
+{
+	/* 重定位表的结构：
+	// DWORD sectionAddress, DWORD size (包括本节需要重定位的数据)
+	// 例如 1000节需要修正5个重定位数据的话，重定位表的数据是
+	// 00 10 00 00   14 00 00 00      xxxx xxxx xxxx xxxx xxxx 0000
+	// -----------   -----------      ----
+	// 给出节的偏移  总尺寸=8+6*2     需要修正的地址           用于对齐4字节
+	// 重定位表是若干个相连，如果address 和 size都是0 表示结束
+	// 需要修正的地址是12位的，高4位是形态字，intel cpu下是3
+	*/
+	//假设NewBase是0x600000,而文件中设置的缺省ImageBase是0x400000,则修正偏移量就是0x200000
+	//注意重定位表的位置可能和硬盘文件中的偏移地址不同，应该使用加载后的地址
+
+	PIMAGE_DOS_HEADER pDosHeader = (PIMAGE_DOS_HEADER)lpBaseAddress;
+	PIMAGE_NT_HEADERS pNtHeaders = (PIMAGE_NT_HEADERS)((ULONG32)pDosHeader + pDosHeader->e_lfanew);
+	PIMAGE_BASE_RELOCATION pLoc = (PIMAGE_BASE_RELOCATION)((unsigned long)pDosHeader + pNtHeaders->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_BASERELOC].VirtualAddress);
+
+	if(pLoc)
+
+	// 判断是否有 重定位表
+	if ((PVOID)pLoc == (PVOID)pDosHeader)
+	{
+		// 重定位表 为空
+		return TRUE;
+	}
+
+	while ((pLoc->VirtualAddress + pLoc->SizeOfBlock) != 0) //开始扫描重定位表
+	{
+		WORD* pLocData = (WORD*)((PBYTE)pLoc + sizeof(IMAGE_BASE_RELOCATION));
+		//计算本节需要修正的重定位项（地址）的数目
+		int nNumberOfReloc = (pLoc->SizeOfBlock - sizeof(IMAGE_BASE_RELOCATION)) / sizeof(WORD);
+
+		for (int i = 0; i < nNumberOfReloc; i++)
+		{
+			// 每个WORD由两部分组成。高4位指出了重定位的类型，WINNT.H中的一系列IMAGE_REL_BASED_xxx定义了重定位类型的取值。
+			// 低12位是相对于VirtualAddress域的偏移，指出了必须进行重定位的位置。
+/*
+			#ifdef _WIN64
+			if ((DWORD)(pLocData[i] & 0x0000F000) == 0x0000A000)
+			{
+			// 64位dll重定位，IMAGE_REL_BASED_DIR64
+			// 对于IA-64的可执行文件，重定位似乎总是IMAGE_REL_BASED_DIR64类型的。
+
+			ULONGLONG* pAddress = (ULONGLONG *)((PBYTE)pNewBase + pLoc->VirtualAddress + (pLocData[i] & 0x0FFF));
+			ULONGLONG ullDelta = (ULONGLONG)pNewBase - m_pNTHeader->OptionalHeader.ImageBase;
+			*pAddress += ullDelta;
+
+			}
+			#endif
+*/
+			if ((DWORD)(pLocData[i] & 0x0000F000) == 0x00003000) //这是一个需要修正的地址
+			{
+				// 32位dll重定位，IMAGE_REL_BASED_HIGHLOW
+				// 对于x86的可执行文件，所有的基址重定位都是IMAGE_REL_BASED_HIGHLOW类型的。
+				DWORD* pAddress = (DWORD*)((PBYTE)pDosHeader + pLoc->VirtualAddress + (pLocData[i] & 0x0FFF));
+				DWORD dwDelta = (DWORD)pDosHeader - pNtHeaders->OptionalHeader.ImageBase;
+				*pAddress += dwDelta;
+
+			}
+		}
+
+		//转移到下一个节进行处理
+		pLoc = (PIMAGE_BASE_RELOCATION)((PBYTE)pLoc + pLoc->SizeOfBlock);
+	}
+
+	return TRUE;
+}
+
 /**
  * Function to write the new PE image and resume the process thread x86.
  * \param lpPI : pointer to the process informations structure.
@@ -471,33 +543,35 @@ BOOL DoRelocationTable(LPVOID lpBaseAddress)
  */
 BOOL RunPE32(const LPPROCESS_INFORMATION lpPI, const LPVOID lpImage)
 {
-	LPVOID lpAllocAddress;
+	LPVOID lpAllocAddress = nullptr;
+	char msg[512] = { 0 };
+	DWORD new_offset = 0;
 
 	const auto lpImageDOSHeader = (PIMAGE_DOS_HEADER)lpImage;
 	const auto lpImageNTHeader32 = (PIMAGE_NT_HEADERS32)((uintptr_t)lpImageDOSHeader + lpImageDOSHeader->e_lfanew);
 
-	// 获取 ntdll.dll 模块句柄
-	HMODULE hNtdll = GetModuleHandle(L"ntdll.dll");
-	if (hNtdll == NULL) {
-		OutputDebugStringA("Get ntdll module failed .");
-		return FALSE;
-	}
+	//// 获取 ntdll.dll 模块句柄
+	//HMODULE hNtdll = GetModuleHandle(L"ntdll.dll");
+	//if (hNtdll == NULL) {
+	//	OutputDebugStringA("Get ntdll module failed .");
+	//	return FALSE;
+	//}
 
-	// 获取 ZwUnmapViewOfSection 函数的地址
-	pfnZwUnmapViewOfSection ZwUnmapViewOfSection = (pfnZwUnmapViewOfSection)GetProcAddress(hNtdll, "ZwUnmapViewOfSection");
-	if (ZwUnmapViewOfSection == NULL) {
-		OutputDebugStringA("get ZwUnmapViewOfSection failed .");
-		return FALSE;
-	}
+	//// 获取 ZwUnmapViewOfSection 函数的地址
+	//pfnZwUnmapViewOfSection ZwUnmapViewOfSection = (pfnZwUnmapViewOfSection)GetProcAddress(hNtdll, "ZwUnmapViewOfSection");
+	//if (ZwUnmapViewOfSection == NULL) {
+	//	OutputDebugStringA("get ZwUnmapViewOfSection failed .");
+	//	return FALSE;
+	//}
 
-	// 调用 ZwUnmapViewOfSection 卸载指定基地址的映像
-	NTSTATUS status = ZwUnmapViewOfSection(lpPI->hProcess, (LPVOID)(uintptr_t)lpImageNTHeader32->OptionalHeader.ImageBase);
-	if (status != 0) { // NT_SUCCESS 宏可以用来检查成功状态
-		char zwmsg[512] = { 0 };
-		sprintf_s(zwmsg, "[+] ZwUnmapViewOfSection failed with status: %ld.\n", status);
-		OutputDebugStringA(zwmsg);
-		return FALSE;
-	}
+	//// 调用 ZwUnmapViewOfSection 卸载指定基地址的映像
+	//NTSTATUS status = ZwUnmapViewOfSection(lpPI->hProcess, (LPVOID)(uintptr_t)lpImageNTHeader32->OptionalHeader.ImageBase);
+	//if (status != 0) { // NT_SUCCESS 宏可以用来检查成功状态
+	//	char zwmsg[512] = { 0 };
+	//	sprintf_s(zwmsg, "[+] ZwUnmapViewOfSection failed with status: %ld.\n", status);
+	//	OutputDebugStringA(zwmsg);
+	//	return FALSE;
+	//}
 
 	lpAllocAddress = VirtualAllocEx(lpPI->hProcess, (LPVOID)(uintptr_t)lpImageNTHeader32->OptionalHeader.ImageBase, lpImageNTHeader32->OptionalHeader.SizeOfImage, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
 	// lpAllocAddress = VirtualAllocEx(lpPI->hProcess, NULL, lpImageNTHeader32->OptionalHeader.SizeOfImage, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
@@ -508,56 +582,87 @@ BOOL RunPE32(const LPPROCESS_INFORMATION lpPI, const LPVOID lpImage)
 
 	if (lpAllocAddress == nullptr)
 	{
-		char msg[512] = { 0 };
-		sprintf_s(msg, "[-] An error is occured when trying to allocate memory for the new image. error code : %d\n",
-			GetLastError());
-		OutputDebugStringA(msg);
+		OutputDebugStringA("[+] start allocate a new address for PE .");
+		// lpAllocAddress = VirtualAllocEx(lpPI->hProcess, NULL, lpImageNTHeader32->OptionalHeader.SizeOfImage, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
 
-		MessageBoxA(NULL, "failed", "pedll", MB_OK);
+		if (lpAllocAddress == nullptr) {
+			char msg[512] = { 0 };
+			sprintf_s(msg, "[-] An error is occured when trying to allocate memory for the new image. error code : %d\n",
+				GetLastError());
+			OutputDebugStringA(msg);
 
-		return FALSE;
+			// MessageBoxA(NULL, "failed", "pedll", MB_OK);
+
+			return FALSE;
+		}
+		else {
+			/*BOOL bWriteImageBase = WriteProcessMemory(lpPI->hProcess, lpAllocAddress,
+				(LPVOID)lpImage, lpImageNTHeader32->OptionalHeader.ImageBase, nullptr);*/
+			/*new_offset = (DWORD)lpAllocAddress - lpImageNTHeader32->OptionalHeader.ImageBase;
+			for (int i = 0; i < IMAGE_NUMBEROF_DIRECTORY_ENTRIES; i++) {
+				const_cast<PIMAGE_NT_HEADERS32>(lpImageNTHeader32)->OptionalHeader.DataDirectory[i].VirtualAddress += new_offset;
+			}*/
+			const_cast<PIMAGE_NT_HEADERS32>(lpImageNTHeader32)->OptionalHeader.ImageBase = (DWORD)lpAllocAddress;
+			sprintf_s(msg, "[+] allocate address for memory. new base addr : 0x%p, now addr : 0x%p\n",
+				lpAllocAddress, (LPVOID)lpImageNTHeader32->OptionalHeader.ImageBase);
+			OutputDebugStringA(msg);
+		}
 	}
-	OutputDebugStringA("DoRelocationTable start");
+	// OutputDebugStringA("[+] DoRelocationTable start");
 
-	DoRelocationTable(lpAllocAddress);
+	// DoRelocationTable(lpAllocAddress);
 
 	// printf("[+] Memory allocate at : 0x%p\n", (LPVOID)(uintptr_t)lpAllocAddress);
-	OutputDebugStringA("[+] Memory allocate at : 0x%p\n");
+	sprintf_s(msg, "[+] Memory allocate at : 0x%p\n", (LPVOID)(uintptr_t)lpAllocAddress);
+	OutputDebugStringA(msg);
 
 	const BOOL bWriteHeaders = WriteProcessMemory(lpPI->hProcess, lpAllocAddress, (LPVOID)lpImage, lpImageNTHeader32->OptionalHeader.SizeOfHeaders, nullptr);
 	if (!bWriteHeaders)
 	{
-		char msg[512] = { 0 };
+		
 		sprintf_s(msg, "[-] An error is occured when trying to write the headers of the new image. error code : %d\n",
 			GetLastError());
 		OutputDebugStringA(msg);
 		return FALSE;
 	}
 
-	// printf("[+] Headers write at : 0x%p\n", (LPVOID)(DWORD64)lpImageNTHeader32->OptionalHeader.ImageBase);
-	
-	OutputDebugStringA("[+] Headers write at : 0x%p\n");
+	sprintf_s(msg, "[+] Headers write at : 0x%p\n", (LPVOID)(DWORD64)lpImageNTHeader32->OptionalHeader.ImageBase);
+	OutputDebugStringA(msg);
 
 	for (int i = 0; i < lpImageNTHeader32->FileHeader.NumberOfSections; i++)
 	{
 		const auto lpImageSectionHeader = (PIMAGE_SECTION_HEADER)((uintptr_t)lpImageNTHeader32 + 4 + sizeof(IMAGE_FILE_HEADER) + lpImageNTHeader32->FileHeader.SizeOfOptionalHeader + (i * sizeof(IMAGE_SECTION_HEADER)));
+		DWORD old_rva = lpImageSectionHeader->VirtualAddress;
+		// const_cast<PIMAGE_SECTION_HEADER>(lpImageSectionHeader)->VirtualAddress += new_offset;
 		const BOOL bWriteSection = WriteProcessMemory(lpPI->hProcess,
 			(LPVOID)((uintptr_t)lpAllocAddress + lpImageSectionHeader->VirtualAddress), (LPVOID)((uintptr_t)lpImage + lpImageSectionHeader->PointerToRawData), lpImageSectionHeader->SizeOfRawData, nullptr);
+
+		/*const BOOL bWriteSection = WriteProcessMemory(lpPI->hProcess,
+			(LPVOID)((uintptr_t)lpAllocAddress + old_rva), (LPVOID)((uintptr_t)lpImage + lpImageSectionHeader->PointerToRawData), lpImageSectionHeader->SizeOfRawData, nullptr);*/
+
 		if (!bWriteSection)
 		{
 			// printf("[-] An error is occured when trying to write the section : %s.\n", (LPSTR)lpImageSectionHeader->Name);
-			OutputDebugStringA("[-] An error is occured when trying to write the section : %s.\n");
+			sprintf_s(msg, "[-] An error is occured when trying to write the section : %s.\n",
+				(LPSTR)lpImageSectionHeader->Name);
+			OutputDebugStringA(msg);
 			return FALSE;
 		}
 
 		// OutputDebugStringA("[+] Section %s write at : 0x%p.\n", (LPSTR)lpImageSectionHeader->Name, (LPVOID)((uintptr_t)lpAllocAddress + lpImageSectionHeader->VirtualAddress));
-		OutputDebugStringA("[+] Section %s write at : 0x%p.\n");
+		sprintf_s(msg, "[+] Section %s write at : 0x%p.\n", (LPSTR)lpImageSectionHeader->Name,
+			(LPVOID)((uintptr_t)lpAllocAddress + lpImageSectionHeader->VirtualAddress));
+		OutputDebugStringA(msg);
 	}
+
+	sprintf_s(msg, "[+] address of entrypoint : 0x%p.\n", (LPVOID)(uintptr_t)lpImageNTHeader32->OptionalHeader.AddressOfEntryPoint);
+	OutputDebugStringA(msg);
 
 	WOW64_CONTEXT CTX = {};
 	CTX.ContextFlags = CONTEXT_FULL;
 
 	const BOOL bGetContext = Wow64GetThreadContext(lpPI->hThread, &CTX);
+	
 	if (!bGetContext)
 	{
 		OutputDebugStringA("[-] An error is occured when trying to get the thread context.\n");
@@ -579,6 +684,8 @@ BOOL RunPE32(const LPPROCESS_INFORMATION lpPI, const LPVOID lpImage)
 		OutputDebugStringA("[-] An error is occured when trying to set the thread context.\n");
 		return FALSE;
 	}
+
+	// MessageBoxA(NULL, "apitest", "phdll", MB_OK);
 
 	ResumeThread(lpPI->hThread);
 
@@ -910,6 +1017,7 @@ BOOL RunPEReloc64(const LPPROCESS_INFORMATION lpPI, const LPVOID lpImage)
 int RunPE(int resourceId)
 {
 	char modulePath[1024];
+	DWORD cur_pid = 0;
 	GetModuleFileNameA(NULL, modulePath, 1024);
 
 	OutputDebugStringA("[PROCESS HOLLOWING]\n");
@@ -946,6 +1054,11 @@ int RunPE(int resourceId)
 		CleanAndExitProcess(&PI, hFileContent);
 		return -1;
 	}
+	cur_pid = PI.dwProcessId;
+
+	char cmsg[256] = { 0 };
+	snprintf(cmsg, sizeof(cmsg), "[+] curprocess pid is : %lu", cur_pid);
+	OutputDebugStringA(cmsg);
 
 	BOOL bTarget32;
 	IsWow64Process(PI.hProcess, &bTarget32);
@@ -1060,7 +1173,7 @@ int RunPE(int resourceId)
 		{
 			OutputDebugStringA("[+] The injection has succeed !\n");
 			CleanProcess(&PI, hFileContent);
-			return 0;
+			return cur_pid;
 		}
 	}
 
@@ -1070,7 +1183,7 @@ int RunPE(int resourceId)
 		{
 			OutputDebugStringA("[+] The injection has succeed !\n");
 			CleanProcess(&PI, hFileContent);
-			return 0;
+			return cur_pid;
 		}
 	}
 
@@ -1084,7 +1197,7 @@ int RunPE(int resourceId)
 			return 0;
 		}
 #else
-		return 0;
+		return cur_pid;
 #endif
 	}
 
@@ -1098,7 +1211,7 @@ int RunPE(int resourceId)
 			return 0;
 		}
 #else 
-		return 0;
+		return cur_pid;
 #endif
 	}
 

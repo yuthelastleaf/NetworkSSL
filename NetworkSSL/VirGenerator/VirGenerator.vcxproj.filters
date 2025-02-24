@@ -16,8 +16,8 @@
     <Filter Include="Generator">
       <UniqueIdentifier>{43a0860d-eaa3-4e9b-beb5-ddf38e511830}</UniqueIdentifier>
     </Filter>
-    <Filter Include="ProcHollowing">
-      <UniqueIdentifier>{f48fb06f-afcd-4094-a3da-8c439c70c1d9}</UniqueIdentifier>
+    <Filter Include="Lua">
+      <UniqueIdentifier>{f51ec8d5-19eb-4cf7-8367-b73afea95653}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -30,19 +30,14 @@
     <ClInclude Include="MemoryModule.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="LuaFunc.h">
+      <Filter>Lua</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Generator.rc">
       <Filter>资源文件</Filter>
     </ResourceCompile>
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="placeholder.exe">
-      <Filter>资源文件</Filter>
-    </None>
-    <None Include="..\x64\Debug\PhDll.dll">
-      <Filter>资源文件</Filter>
-    </None>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -54,5 +49,11 @@
     <ClCompile Include="PEGenerator.cpp">
       <Filter>Generator</Filter>
     </ClCompile>
+    <ClCompile Include="LuaFunc.cpp">
+      <Filter>Lua</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\Release\PhDll.dll" />
   </ItemGroup>
 </Project>
