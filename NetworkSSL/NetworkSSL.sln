@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 17
-VisualStudioVersion = 17.11.35219.272
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.34301.259
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "TLSServer", "TLSServer\TLSServer.vcxproj", "{420035A7-1ABA-4E3A-A92F-CFECAFF8C490}"
 EndProject
@@ -92,6 +92,8 @@ EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "SGCheck", "SGCheck\SGCheck.vcxproj", "{D60C77F5-5A39-41F2-A7E8-9059AADA30AD}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "TransCodeDemo", "TransCodeDemo\TransCodeDemo.vcxproj", "{E17E5EE3-FB3A-4F4F-A8B0-86D25E56BC23}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "TransWater", "TransWater\TransWater.vcxproj", "{D9122E84-E218-4FE6-9C2B-0C65B794297A}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -1327,6 +1329,40 @@ Global
 		{E17E5EE3-FB3A-4F4F-A8B0-86D25E56BC23}.Release|x64.Build.0 = Release|x64
 		{E17E5EE3-FB3A-4F4F-A8B0-86D25E56BC23}.Release|x86.ActiveCfg = Release|Win32
 		{E17E5EE3-FB3A-4F4F-A8B0-86D25E56BC23}.Release|x86.Build.0 = Release|Win32
+		{D9122E84-E218-4FE6-9C2B-0C65B794297A}.Debug|Any CPU.ActiveCfg = Debug|Win32
+		{D9122E84-E218-4FE6-9C2B-0C65B794297A}.Debug|ARM.ActiveCfg = Debug|Win32
+		{D9122E84-E218-4FE6-9C2B-0C65B794297A}.Debug|ARM64.ActiveCfg = Debug|Win32
+		{D9122E84-E218-4FE6-9C2B-0C65B794297A}.Debug|x64.ActiveCfg = Debug|x64
+		{D9122E84-E218-4FE6-9C2B-0C65B794297A}.Debug|x64.Build.0 = Debug|x64
+		{D9122E84-E218-4FE6-9C2B-0C65B794297A}.Debug|x86.ActiveCfg = Debug|Win32
+		{D9122E84-E218-4FE6-9C2B-0C65B794297A}.Debug|x86.Build.0 = Debug|Win32
+		{D9122E84-E218-4FE6-9C2B-0C65B794297A}.Release_clr|Any CPU.ActiveCfg = Debug|Win32
+		{D9122E84-E218-4FE6-9C2B-0C65B794297A}.Release_clr|Any CPU.Build.0 = Debug|Win32
+		{D9122E84-E218-4FE6-9C2B-0C65B794297A}.Release_clr|ARM.ActiveCfg = Debug|Win32
+		{D9122E84-E218-4FE6-9C2B-0C65B794297A}.Release_clr|ARM.Build.0 = Debug|Win32
+		{D9122E84-E218-4FE6-9C2B-0C65B794297A}.Release_clr|ARM64.ActiveCfg = Debug|Win32
+		{D9122E84-E218-4FE6-9C2B-0C65B794297A}.Release_clr|ARM64.Build.0 = Debug|Win32
+		{D9122E84-E218-4FE6-9C2B-0C65B794297A}.Release_clr|x64.ActiveCfg = Release|x64
+		{D9122E84-E218-4FE6-9C2B-0C65B794297A}.Release_clr|x64.Build.0 = Release|x64
+		{D9122E84-E218-4FE6-9C2B-0C65B794297A}.Release_clr|x86.ActiveCfg = Release|Win32
+		{D9122E84-E218-4FE6-9C2B-0C65B794297A}.Release_clr|x86.Build.0 = Release|Win32
+		{D9122E84-E218-4FE6-9C2B-0C65B794297A}.Release_Cmd|Any CPU.ActiveCfg = Debug|Win32
+		{D9122E84-E218-4FE6-9C2B-0C65B794297A}.Release_Cmd|Any CPU.Build.0 = Debug|Win32
+		{D9122E84-E218-4FE6-9C2B-0C65B794297A}.Release_Cmd|ARM.ActiveCfg = Debug|Win32
+		{D9122E84-E218-4FE6-9C2B-0C65B794297A}.Release_Cmd|ARM.Build.0 = Debug|Win32
+		{D9122E84-E218-4FE6-9C2B-0C65B794297A}.Release_Cmd|ARM64.ActiveCfg = Debug|Win32
+		{D9122E84-E218-4FE6-9C2B-0C65B794297A}.Release_Cmd|ARM64.Build.0 = Debug|Win32
+		{D9122E84-E218-4FE6-9C2B-0C65B794297A}.Release_Cmd|x64.ActiveCfg = Release|x64
+		{D9122E84-E218-4FE6-9C2B-0C65B794297A}.Release_Cmd|x64.Build.0 = Release|x64
+		{D9122E84-E218-4FE6-9C2B-0C65B794297A}.Release_Cmd|x86.ActiveCfg = Release|Win32
+		{D9122E84-E218-4FE6-9C2B-0C65B794297A}.Release_Cmd|x86.Build.0 = Release|Win32
+		{D9122E84-E218-4FE6-9C2B-0C65B794297A}.Release|Any CPU.ActiveCfg = Release|Win32
+		{D9122E84-E218-4FE6-9C2B-0C65B794297A}.Release|ARM.ActiveCfg = Release|Win32
+		{D9122E84-E218-4FE6-9C2B-0C65B794297A}.Release|ARM64.ActiveCfg = Release|Win32
+		{D9122E84-E218-4FE6-9C2B-0C65B794297A}.Release|x64.ActiveCfg = Release|x64
+		{D9122E84-E218-4FE6-9C2B-0C65B794297A}.Release|x64.Build.0 = Release|x64
+		{D9122E84-E218-4FE6-9C2B-0C65B794297A}.Release|x86.ActiveCfg = Release|Win32
+		{D9122E84-E218-4FE6-9C2B-0C65B794297A}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -1366,6 +1402,7 @@ Global
 		{EE93D39E-F129-472D-8FCB-56BAD75947CA} = {70D90183-E73F-4927-B4DC-F4185A3589EA}
 		{D60C77F5-5A39-41F2-A7E8-9059AADA30AD} = {70D90183-E73F-4927-B4DC-F4185A3589EA}
 		{E17E5EE3-FB3A-4F4F-A8B0-86D25E56BC23} = {47B76CBF-3AB3-46E5-8DF2-80306EFCD9E0}
+		{D9122E84-E218-4FE6-9C2B-0C65B794297A} = {70D90183-E73F-4927-B4DC-F4185A3589EA}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {415CF697-4243-436E-B146-09FD10C4E1B9}
