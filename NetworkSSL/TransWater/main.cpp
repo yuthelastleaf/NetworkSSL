@@ -3,6 +3,7 @@
 #include <vector>
 #include <string>
 #include <GdiPlus.h>
+#include <atlimage.h>
 
 #include "savebit.h"
 
@@ -16,7 +17,126 @@ const UINT_PTR TIMER_ID = 1;
 const UINT_PTR UPDATE_ID = 2;
 Mat g_DisplayBuffer; // 显示缓冲
 
+// 全局初始化
+ULONG_PTR gdiplusToken;
+Gdiplus::GdiplusStartupInput gdiplusStartupInput;
+
+
 void UpdateDisplayBuffer(HWND hwnd);
+
+
+
+auto ConvertCVMatToBMP(cv::Mat frame) -> HBITMAP
+{
+    auto convertOpenCVBitDepthToBits = [](const int32_t value)
+        {
+            auto regular = 0u;
+
+            switch (value)
+            {
+            case CV_8U:
+            case CV_8S:
+                regular = 8u;
+                break;
+
+            case CV_16U:
+            case CV_16S:
+                regular = 16u;
+                break;
+
+            case CV_32S:
+            case CV_32F:
+                regular = 32u;
+                break;
+
+            case CV_64F:
+                regular = 64u;
+                break;
+
+            default:
+                regular = 0u;
+                break;
+            }
+
+            return regular;
+        };
+
+    auto imageSize = frame.size();
+    assert(imageSize.width && "invalid size provided by frame");
+    assert(imageSize.height && "invalid size provided by frame");
+
+    if (imageSize.width && imageSize.height)
+    {
+        auto headerInfo = BITMAPINFOHEADER{};
+        ZeroMemory(&headerInfo, sizeof(headerInfo));
+
+        headerInfo.biSize = sizeof(headerInfo);
+        headerInfo.biWidth = imageSize.width;
+        headerInfo.biHeight = -(imageSize.height); // negative otherwise it will be upsidedown
+        headerInfo.biPlanes = 1;// must be set to 1 as per documentation frame.channels();
+
+        const auto bits = convertOpenCVBitDepthToBits(frame.depth());
+        headerInfo.biBitCount = frame.channels() * bits;
+
+        auto bitmapInfo = BITMAPINFO{};
+        ZeroMemory(&bitmapInfo, sizeof(bitmapInfo));
+
+        bitmapInfo.bmiHeader = headerInfo;
+        bitmapInfo.bmiColors->rgbBlue = 0;
+        bitmapInfo.bmiColors->rgbGreen = 0;
+        bitmapInfo.bmiColors->rgbRed = 0;
+        bitmapInfo.bmiColors->rgbReserved = 0;
+
+        auto dc = GetDC(nullptr);
+        assert(dc != nullptr && "Failure to get DC");
+        auto bmp = CreateDIBitmap(dc,
+            &headerInfo,
+            CBM_INIT,
+            frame.data,
+            &bitmapInfo,
+            DIB_RGB_COLORS);
+        assert(bmp != nullptr && "Failure creating bitmap from captured frame");
+
+        return bmp;
+    }
+    else
+    {
+        return nullptr;
+    }
+}
+
+void ConvertMatToCImageWithAlpha(const cv::Mat& src, CImage& dst) {
+    // 确保 Mat 是四通道 BGRA 格式
+    CV_Assert(src.type() == CV_8UC4);
+
+    // 创建 32 位 CImage（负高度确保 top-down 布局）
+    dst.Create(src.cols, -src.rows, 32, 1);
+    dst.SetHasAlphaChannel(true);
+    if (dst.IsNull()) {
+        throw std::runtime_error("Failed to create CImage");
+    }
+
+    // 获取 CImage 像素数据指针和步长
+    BYTE* pDst = reinterpret_cast<BYTE*>(dst.GetBits());
+    const int dstStride = dst.GetPitch();
+    const int srcStride = src.step;
+    int cns = dst.GetTransparentColor();
+
+    // 直接内存复制（若步长一致）
+    if (srcStride == dstStride) {
+        memcpy(pDst, src.data, src.rows * srcStride);
+    }
+    else {
+        // 逐行拷贝处理步长差异
+        for (int y = 0; y < src.rows; ++y) {
+            
+            const BYTE* pSrcRow = src.ptr<BYTE>(y);
+            BYTE* pDstRow = pDst + y * dstStride;
+            memcpy(pDstRow, pSrcRow, src.cols * 4); // 每像素 4 字节
+        }
+    }
+}
+
 
 //Gdiplus::Bitmap* CreateBitmapFromHBITMAP(IN HBITMAP hBitmap)
 //{
@@ -132,22 +252,97 @@ bool Mat2HBitmap(HBITMAP& hBmp, Mat& mat)
 
 // 更新窗口内容（关键函数）
 void UpdateWindowContent(HWND hwnd) {
-    if (g_DisplayBuffer.empty() || g_DisplayBuffer.type() != CV_8UC4) {
+    /*if (g_DisplayBuffer.empty() || g_DisplayBuffer.type() != CV_8UC4) {
+        return;
+    }*/
+
+    PAINTSTRUCT ps;
+    HDC hdc = BeginPaint(hwnd, &ps);
+
+    ps.fErase = true;
+
+    // 创建内存 DC 并初始化
+    // HDC hdcMem = CreateCompatibleDC(hdc);
+    HDC hdcMem = CreateCompatibleDC(hdc);
+    Gdiplus::Bitmap bmp(L"wode.png");
+    if (bmp.GetLastStatus() != Gdiplus::Ok) {
+        DeleteDC(hdcMem);
+        EndPaint(hwnd, &ps);
         return;
     }
+
+    // 创建兼容位图并清空背景
+    HBITMAP hbmpMem = CreateCompatibleBitmap(hdc, bmp.GetWidth(), bmp.GetHeight());
+
+    bmp.GetHBITMAP(0, &hbmpMem);
+
+    HBITMAP hOldBmp = (HBITMAP)SelectObject(hdcMem, hbmpMem);
+
+    CImage srcimage;
+
+    srcimage.Load(L"wode.png");
+    srcimage.Draw(hdcMem, { 0, 0, srcimage.GetWidth(), srcimage.GetHeight() });
+
+    RECT dcmem_rect = { 0, 0, bmp.GetWidth(), bmp.GetHeight() };
+    // FillRect(hdcMem, &dcmem_rect, (HBRUSH)GetStockObject(BLACK_BRUSH));
+
+    // 绘制 PNG 到内存 DC（保留 Alpha）
+    // Gdiplus::Graphics graphics(hdcMem);
+    // graphics.DrawImage(&bmp, 0, 0, bmp.GetWidth(), bmp.GetHeight());
+
+    // 使用 AlphaBlend 传输到窗口 DC
+    BLENDFUNCTION bf = { AC_SRC_OVER, 0, 255, AC_SRC_ALPHA };
+    /*AlphaBlend(
+        hdc, 0, 0, bmp.GetWidth(), bmp.GetHeight(),
+        hdcMem, 0, 0, bmp.GetWidth(), bmp.GetHeight(),
+        bf
+    );*/
+    BitBlt(hdc, 0, 0, bmp.GetWidth(), bmp.GetHeight(), hdcMem, 0, 0, SRCCOPY);
+
+    // 清理资源
+    SelectObject(hdcMem, hOldBmp);
+    DeleteObject(hbmpMem);
+    DeleteDC(hdcMem);
+    EndPaint(hwnd, &ps);
+
+    //PAINTSTRUCT ps;
+    //HDC hdc = BeginPaint(hwnd, &ps);
+
+    //HDC hdcScreen = GetDC(hwnd);
+
+    //HDC hdcMem = CreateCompatibleDC(hdcScreen);
+    //if (!hdcMem) {
+    //    ReleaseDC(NULL, hdc);
+    //    return;
+    //}
+
+    //Gdiplus::Bitmap bmp(L"wode.png");
+    //HBITMAP hbmp;
+    //bmp.GetHBITMAP({ 0, 0, 0, 0 }, &hbmp);
+    //SelectObject(hdcMem, hbmp);
+    //::TransparentBlt(hdc, 0, 0, bmp.GetWidth(), bmp.GetHeight(),
+    //    hdcMem, 0, 0, bmp.GetWidth(), bmp.GetHeight(), 0);
+
+    //DeleteDC(hdcMem);
+    //// ReleaseDC(NULL, hdcScreen);
+    //EndPaint(hwnd, &ps);
+    //return;
+    // ::SetBkMode(hdcMem, TRANSPARENT);
+
 
     // 获取屏幕DC（必须用GetDC(NULL)获取桌面DC）
-    HDC hdcScreen = GetDC(hwnd);
+    /*HDC hdcScreen = GetDC(hwnd);
     if (!hdcScreen) {
         return;
-    }
+    }*/
 
     // 创建兼容内存DC
-    HDC hdcMem = CreateCompatibleDC(hdcScreen);
+    /*HDC hdcMem = CreateCompatibleDC(hdcScreen);
     if (!hdcMem) {
         ReleaseDC(NULL, hdcScreen);
         return;
     }
+    ::SetBkMode(hdcMem, TRANSPARENT);*/
 
     //// 创建32位ARGB DIB
     //BITMAPINFOHEADER bmi = { 0 };
@@ -175,37 +370,124 @@ void UpdateWindowContent(HWND hwnd) {
     // HBITMAP hBitmap = CreateBitmap(g_DisplayBuffer.cols, g_DisplayBuffer.rows, 1, g_DisplayBuffer.channels() * 8, g_DisplayBuffer.data);
 
    
-
+    // HBITMAP transbit = ConvertCVMatToBMP(g_DisplayBuffer);
     
     // ImageHelper::SaveBitmapToFile(hBitmap, "test.bmp");
-    imwrite("test.png", g_DisplayBuffer);
+    // ImageHelper::SaveBitmapToFile(transbit, "test.bmp");
+    // imwrite("test.png", g_DisplayBuffer);
 
-    Gdiplus::Bitmap gdi_bitmap(g_DisplayBuffer.cols, g_DisplayBuffer.rows, g_DisplayBuffer.step1(), PixelFormat32bppARGB, g_DisplayBuffer.data);
-    Gdiplus::Graphics baseGraph(hdcMem);
-    baseGraph.DrawImage(&gdi_bitmap, Gdiplus::Rect(0, 0, g_DisplayBuffer.cols, g_DisplayBuffer.rows));
+    /*CImage image;
+    image.Load(L"test.png");
+    int length = image.GetWidth();
+    length = image.GetHeight();*/
+    //COLORREF color = image.GetPixel(1080, 1920);
+    // void* bits = image.GetBits();
+
+
+   
+
+    // image.Draw(hdcMem, 0, 0, g_DisplayBuffer.cols, g_DisplayBuffer.rows);
+
+
+    // Gdiplus::Graphics graphics(hdcMem);
+    // Gdiplus::Image gdi_image(L"test.png");
+    // graphics.DrawImage(&gdi_image, 0, 0, gdi_image.GetWidth(), gdi_image.GetHeight());
+    
+    
+    // image.Draw(hdc, 0, 0, g_DisplayBuffer.cols, g_DisplayBuffer.rows);
+    // image.BitBlt(hdc, { 0, 0, g_DisplayBuffer.cols, g_DisplayBuffer.rows }, { 0, 0 });
+    /*BLENDFUNCTION bf;
+
+    bf.BlendOp = AC_SRC_OVER;
+    bf.BlendFlags = 0;
+    bf.SourceConstantAlpha = 0xff;
+    bf.AlphaFormat = AC_SRC_ALPHA;*/
+    /*::AlphaBlend(hdc, 0, 0, g_DisplayBuffer.cols, g_DisplayBuffer.rows,
+        hdcMem, 0, 0, g_DisplayBuffer.cols, g_DisplayBuffer.rows, bf);*/
+    
+    // BitBlt(hdc, 0, 0, g_DisplayBuffer.cols, g_DisplayBuffer.rows, hdcMem, 0, 0, SRCCOPY);
+        
+     // Gdiplus::Bitmap gdi_bitmap(g_DisplayBuffer.cols, g_DisplayBuffer.rows, g_DisplayBuffer.step1(), PixelFormat32bppARGB, g_DisplayBuffer.data);
+     /*Gdiplus::Bitmap gdi_bitmap(g_DisplayBuffer.cols, g_DisplayBuffer.rows, PixelFormat32bppARGB);
+     HBITMAP testbit;
+     gdi_bitmap.GetHBITMAP(Gdiplus::Color(0, 0, 0, 0), &testbit);
+     ImageHelper::SaveBitmapToFile(testbit, "test2.bmp");*/
+     
+     // Gdiplus::Bitmap my_bit(L"test.bmp");
+     // my_bit.FromFile(L"test.png");
+     // Gdiplus::Graphics baseGraph(hdcMem);
+     // baseGraph.DrawImage(&my_bit, Gdiplus::Rect(0, 0, g_DisplayBuffer.cols, g_DisplayBuffer.rows));
+
+    // HBITMAP testbit;
+    // my_bit.GetHBITMAP(Gdiplus::Color(0, 0, 0, 0), &testbit);
 
     //// 选择位图到内存DC
-    //HGDIOBJ hOld = SelectObject(hdcMem, hBitmap);
+    //HGDIOBJ hOld = SelectObject(hdcMem, testbit);
     //if (hOld == NULL || GetLastError() != ERROR_SUCCESS) {
-    //    DeleteObject(hBitmap);
+    //    DeleteObject(testbit);
     //    DeleteDC(hdcMem);
     //    ReleaseDC(NULL, hdcScreen);
     //    return;
     //}
 
-    // 设置混合参数
-    BLENDFUNCTION blend = { 0 };
-    blend.BlendOp = AC_SRC_OVER;
-    blend.SourceConstantAlpha = 255; // 全局透明度
-    blend.AlphaFormat = AC_SRC_ALPHA; // 关键参数
+    //// 设置混合参数
+    //BLENDFUNCTION blend = { 0 };
+    //blend.BlendOp = AC_SRC_OVER;
+    //blend.SourceConstantAlpha = 128; // 全局透明度
+    //blend.AlphaFormat = AC_SRC_ALPHA; // 关键参数
 
-    // 窗口位置和尺寸
-    POINT ptDst = { 0, 0 }; // 窗口左上角屏幕坐标
-    SIZE sizeWnd = { g_DisplayBuffer.cols, g_DisplayBuffer.rows };
-    POINT ptSrc = { 0, 0 }; // 源图像起始点
+    //::AlphaBlend(hdcScreen, 0, 0, g_DisplayBuffer.cols, g_DisplayBuffer.rows, hdcMem, 0, 0,
+    //    g_DisplayBuffer.cols, g_DisplayBuffer.rows, blend);
 
-    BitBlt(hdcScreen, 0, 0, g_DisplayBuffer.cols, g_DisplayBuffer.rows, hdcMem, 0, 0, SRCCOPY);
+    //// 窗口位置和尺寸
+    //POINT ptDst = { 0, 0 }; // 窗口左上角屏幕坐标
+    //SIZE sizeWnd = { g_DisplayBuffer.cols, g_DisplayBuffer.rows };
+    //POINT ptSrc = { 0, 0 }; // 源图像起始点
 
+    // BitBlt(hdcScreen, 0, 0, g_DisplayBuffer.cols, g_DisplayBuffer.rows, hdcMem, 0, 0, SRCCOPY);
+
+    
+
+    // CImage image;
+
+    // ConvertMatToCImageWithAlpha(g_DisplayBuffer, image);
+
+    //创建CImage对象附加图像，需与源图像大小类型一致
+    // image.Create(g_DisplayBuffer.cols, g_DisplayBuffer.rows, 8 * g_DisplayBuffer.channels());
+
+    /*
+    if (src.channels() == 1)
+    {
+        //将源位图转成八位灰度图时，CImage对象需用到颜色表，需定义一个RGBQUAD数组，并填充该数组
+        RGBQUAD* colorTable = new RGBQUAD[256];
+        for (int i = 0; i < 256; i++)
+        {
+            colorTable[i].rgbRed = i;
+            colorTable[i].rgbGreen = i;
+            colorTable[i].rgbBlue = i;
+        }
+
+        //设置颜色表RGB分量值
+        dst.SetColorTable(0, 255, colorTable);
+    }
+    */
+
+    // 将 image 内存复制，但是会异常
+    //int rows = g_DisplayBuffer.rows;
+    //int cols = g_DisplayBuffer.cols;
+    //uchar channels = g_DisplayBuffer.channels();
+
+    //LONG cns = image.IsTransparencySupported();
+    ////内存中的数据传送，注意这里是逐行传送。
+    //for (int i = 0; i < rows; i++)
+    //{
+    //    memcpy(image.GetPixelAddress(0, i), g_DisplayBuffer.ptr<uchar>(i), cols * channels);
+    //}
+    //// LONG cns = image.GetTransparentColor();
+    // image.TransparentBlt(hdcMem, { 0, 0, g_DisplayBuffer.cols, g_DisplayBuffer.rows });
+    // BitBlt(hdcScreen, 0, 0, g_DisplayBuffer.cols, g_DisplayBuffer.rows, hdcMem, 0, 0, SRCCOPY);
+
+    
     //// 调用关键API
     //BOOL bRet = UpdateLayeredWindow(
     //    hwnd,          // 目标窗口句柄
@@ -229,9 +511,8 @@ void UpdateWindowContent(HWND hwnd) {
 
     // 清理资源
     // SelectObject(hdcMem, hOld);
-    // DeleteObject(hBitmap);
-    DeleteDC(hdcMem);
-    ReleaseDC(NULL, hdcScreen);
+    // DeleteObject(testbit);
+    
 }
 
 
@@ -369,15 +650,17 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             ::SetWindowPos(hwnd, h_prewnd, rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top, NULL);
         }
         else if (wParam == UPDATE_ID) {
-            UpdateDisplayBuffer(hwnd);
+            // UpdateDisplayBuffer(hwnd);
+            UpdateWindowContent(hwnd);
         }   
         return 0;
     case WM_PAINT: {
 
+        // UpdateWindowContent(hwnd);
         UpdateWindowContent(hwnd);
 
-        //PAINTSTRUCT ps;
-        //HDC hdc = BeginPaint(hwnd, &ps);
+        /*PAINTSTRUCT ps;
+        HDC hdc = BeginPaint(hwnd, &ps);*/
 
         //// 将OpenCV缓冲数据绘制到窗口
         //if (!g_DisplayBuffer.empty()) {
@@ -402,11 +685,15 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         //    );
         //}
 
-        //EndPaint(hwnd, &ps);
+        // EndPaint(hwnd, &ps);
         return 0;
     }
+    case WM_ERASEBKGND:
+        return 1; // 直接返回，禁止擦除
     case WM_DESTROY:
         KillTimer(hwnd, TIMER_ID);
+        KillTimer(hwnd, UPDATE_ID);
+        Gdiplus::GdiplusShutdown(gdiplusToken);
         PostQuitMessage(0);
         return 0;
     default:
@@ -441,10 +728,12 @@ HWND CreateTransparentWindow(int width, int height) {
     // SetLayeredWindowAttributes(hwnd, 0, 255, LWA_ALPHA);
 
     // 设置窗口透明度//从任务栏中去掉.
+    /*SetWindowLong(hwnd, GWL_EXSTYLE, GetWindowLong(hwnd, GWL_EXSTYLE)
+        & ~WS_EX_APPWINDOW | WS_EX_TOOLWINDOW | WS_EX_TRANSPARENT | WS_EX_TOPMOST);*/
     SetWindowLong(hwnd, GWL_EXSTYLE, GetWindowLong(hwnd, GWL_EXSTYLE)
         & ~WS_EX_APPWINDOW | WS_EX_TOOLWINDOW | WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOPMOST);
 
-    ::SetLayeredWindowAttributes(hwnd, GetSysColor(CTLCOLOR_DLG), 30, 2 | LWA_COLORKEY);
+    ::SetLayeredWindowAttributes(hwnd, GetSysColor(CTLCOLOR_DLG), 128, 2 | LWA_COLORKEY);
 
     // 显示窗口
     ShowWindow(hwnd, SW_SHOW);
@@ -524,10 +813,12 @@ void UpdateDisplayBuffer(HWND hwnd) {
     g_DisplayBuffer = canvas;
 
     // 请求重绘
-    InvalidateRect(hwnd, NULL, FALSE);
+    // InvalidateRect(hwnd, NULL, FALSE);
 }
 
 int main() {
+
+    Gdiplus::GdiplusStartup(&gdiplusToken, &gdiplusStartupInput, nullptr);
     // 创建窗口
     HWND hwnd = CreateTransparentWindow(
         GetSystemMetrics(SM_CXSCREEN),
@@ -535,13 +826,21 @@ int main() {
     );
 
     // 初始化OpenCV缓冲
-    UpdateDisplayBuffer(hwnd);
+    // UpdateDisplayBuffer(hwnd);
+    // UpdateWindowContent(hwnd);
+    
 
     // 消息循环
     MSG msg;
-    while (GetMessage(&msg, NULL, 0, 0)) {
-        TranslateMessage(&msg);
-        DispatchMessage(&msg);
+    while (true) {
+        if (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
+            if (msg.message == WM_QUIT) break;
+            TranslateMessage(&msg);
+            DispatchMessage(&msg);
+        }
+        else {
+            // 空闲时处理其他任务（可选）
+        }
     }
 
     return 0;
