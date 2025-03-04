@@ -11,6 +11,8 @@ using namespace cv;
 
 #pragma comment(lib,"Gdiplus.lib")
 
+#define RGBA(r,g,b,a)          (COLORREF)(((BYTE)(r) |((WORD)((BYTE)(g)) << 8)) |(((DWORD)((BYTE)(b)) << 16)) |(((DWORD)((BYTE)(a)) << 24)))
+
 // 全局变量
 const wchar_t* g_ClassName = L"TransparentWindow";
 const UINT_PTR TIMER_ID = 1;
@@ -255,36 +257,48 @@ void UpdateWindowContent(HWND hwnd) {
     /*if (g_DisplayBuffer.empty() || g_DisplayBuffer.type() != CV_8UC4) {
         return;
     }*/
+    UpdateDisplayBuffer(hwnd);
 
     PAINTSTRUCT ps;
     HDC hdc = BeginPaint(hwnd, &ps);
 
     ps.fErase = true;
 
+    // 初始化背景为透明（可选）
+    CImage image;
+    image.Create(GetSystemMetrics(SM_CXSCREEN),
+        GetSystemMetrics(SM_CYSCREEN), 32, 1);
+    // image.Draw(hdc, { 0, 0,GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN) });
+
+    // graphics.Clear(Gdiplus::Color(0, 0, 0, 0));  // ARGB(0,0,0,0) 全透明
+
+
+    HDC hdcscreen = GetDC(NULL);
     // 创建内存 DC 并初始化
     // HDC hdcMem = CreateCompatibleDC(hdc);
     HDC hdcMem = CreateCompatibleDC(hdc);
-    Gdiplus::Bitmap bmp(L"wode.png");
-    if (bmp.GetLastStatus() != Gdiplus::Ok) {
-        DeleteDC(hdcMem);
-        EndPaint(hwnd, &ps);
-        return;
-    }
 
     // 创建兼容位图并清空背景
-    HBITMAP hbmpMem = CreateCompatibleBitmap(hdc, bmp.GetWidth(), bmp.GetHeight());
+    HBITMAP hbmpMem = CreateCompatibleBitmap(hdc, GetSystemMetrics(SM_CXSCREEN),
+        GetSystemMetrics(SM_CYSCREEN));
+    ::SetBkMode(hdcMem, TRANSPARENT);
 
-    bmp.GetHBITMAP(0, &hbmpMem);
+    // Mat2HBitmap(hbmpMem, g_DisplayBuffer);
+
+
+    // bmp.GetHBITMAP(0, &hbmpMem);
 
     HBITMAP hOldBmp = (HBITMAP)SelectObject(hdcMem, hbmpMem);
 
     CImage srcimage;
 
-    srcimage.Load(L"wode.png");
+    srcimage.Load(L"rotate.png");
     srcimage.Draw(hdcMem, { 0, 0, srcimage.GetWidth(), srcimage.GetHeight() });
+    // srcimage.Draw(hdc, { 0, 0, srcimage.GetWidth(), srcimage.GetHeight() });
 
-    RECT dcmem_rect = { 0, 0, bmp.GetWidth(), bmp.GetHeight() };
-    // FillRect(hdcMem, &dcmem_rect, (HBRUSH)GetStockObject(BLACK_BRUSH));
+    // RECT dcmem_rect = { 0, 0, bmp.GetWidth(), bmp.GetHeight() };
+    // FillRect(hdc, &dcmem_rect, (HBRUSH)GetStockObject(LTGRAY_BRUSH));
+    // ::SetBkMode(hdc, TRANSPARENT);
 
     // 绘制 PNG 到内存 DC（保留 Alpha）
     // Gdiplus::Graphics graphics(hdcMem);
@@ -292,12 +306,36 @@ void UpdateWindowContent(HWND hwnd) {
 
     // 使用 AlphaBlend 传输到窗口 DC
     BLENDFUNCTION bf = { AC_SRC_OVER, 0, 255, AC_SRC_ALPHA };
+
+     DWORD type = GetObjectType(hdcMem);
+     type = GetObjectType(hdc);
     /*AlphaBlend(
         hdc, 0, 0, bmp.GetWidth(), bmp.GetHeight(),
         hdcMem, 0, 0, bmp.GetWidth(), bmp.GetHeight(),
         bf
     );*/
-    BitBlt(hdc, 0, 0, bmp.GetWidth(), bmp.GetHeight(), hdcMem, 0, 0, SRCCOPY);
+
+    // 设置混合参数
+    BLENDFUNCTION blend = { 0 };
+    blend.BlendOp = AC_SRC_OVER;
+    blend.SourceConstantAlpha = 128; // 全局透明度
+    blend.AlphaFormat = AC_SRC_ALPHA; // 关键参数
+    POINT ptDst = { 0, 0 }; // 窗口左上角屏幕坐标
+    SIZE sizeWnd = { srcimage.GetWidth(), srcimage.GetHeight() };
+    POINT ptSrc = { 0, 0 }; // 源图像起始点
+    COLORREF laycolor = RGBA(0, 0, 0, 20);
+    BOOL bRet = UpdateLayeredWindow(
+        hwnd,          // 目标窗口句柄
+        hdc,           // 目标DC（必须为屏幕DC）
+        &ptDst,        // 窗口新位置
+        &sizeWnd,      // 窗口新尺寸
+        hdcMem,        // 源DC
+        &ptSrc,        // 源起始点
+        laycolor,             // 颜色键（不使用）
+        &blend,        // 混合参数
+        ULW_ALPHA      // 使用Alpha通道
+    );
+    // BitBlt(hdc, 0, 0, bmp.GetWidth(), bmp.GetHeight(), hdcMem, 0, 0, SRCCOPY);
 
     // 清理资源
     SelectObject(hdcMem, hOldBmp);
@@ -540,8 +578,7 @@ Mat CreateRotatedWatermark(
     Scalar color,
     double angleDegree,
     Size jianju,
-    Size baseSize,
-    Point& finalPosition // 输出最终位置
+    Size baseSize
 ) {
     // 角度转弧度
     double θ = angleDegree * CV_PI / 180.0;
@@ -550,57 +587,79 @@ Mat CreateRotatedWatermark(
     int baseLine = 0;
     Size textSize = getTextSize(text, FONT_HERSHEY_SIMPLEX,
         fontSize, 2, &baseLine);
-    int w = textSize.width;
-    int h = textSize.height + baseLine;
+    int w = baseSize.width;
+    int h = baseSize.height;
+
+    
 
     // 计算扩展画布尺寸
-    double sinθ = sin(θ), cosθ = cos(θ);
-    int w2 = w + 2 * h * sinθ * cosθ;
-    int h2 = h + 2 * w * sinθ * cosθ;
+    double val_sin = sin(θ), val_cos = cos(θ);
+
+    int w1 = static_cast<int>((double)w * val_cos + (double)h * val_sin);
+    int h1 = static_cast<int>((double)h * val_cos + (double)w * val_sin);
+
+    int w2 = w + static_cast<int>(2.0 * (double)h * val_sin * val_cos);
+    int h2 = h + static_cast<int>(2.0 * (double)w * val_sin * val_cos);
+
+    int pposx = static_cast<int>((double)w * val_cos * val_sin);
+    int pposy = static_cast<int>((double)h * val_cos * val_sin);
 
     // 创建扩展画布
-    Mat extendedCanvas(h2, w2, CV_8UC4, Scalar(0, 0, 0, 0));
+    Mat extendedCanvas(h1, w1, CV_8UC4, Scalar(0, 0, 0, 0));
+    Mat extendedCanvasL(h2, w2, CV_8UC4, Scalar(0, 0, 0, 0));
+    // Mat rotated(h, w, CV_8UC4, Scalar(0, 0, 0, 0));
 
-    // 计算原始文字在扩展画布中的位置
-    int offsetX = h * sinθ * cosθ;
-    int offsetY = w * sinθ * cosθ;
-    Rect textROI(offsetX, offsetY, w, h);
+    //// 计算原始文字在扩展画布中的位置
+    //int offsetX = h * sinθ * cosθ;
+    //int offsetY = w * sinθ * cosθ;
+    //Rect textROI(offsetX, offsetY, w, h);
 
-    // 在子ROI中绘制原始文字
-    Mat textArea = extendedCanvas(textROI);
+    //// 在子ROI中绘制原始文字
+    //Mat textArea = extendedCanvas(textROI);
 
-    std::vector<Point> point_draw = calculateTilingPositions(baseSize, jianju);
+    //std::vector<Point> point_draw = calculateTilingPositions(baseSize, jianju);
 
-    for (int i = 0; i < point_draw.size(); i++) {
+    //for (int i = 0; i < point_draw.size(); i++) {
 
-        putText(textArea, text, point_draw[i],
-            FONT_HERSHEY_SIMPLEX, fontSize, color,
-            2, LINE_AA);
-    }
+    //    putText(textArea, text, point_draw[i],
+    //        FONT_HERSHEY_SIMPLEX, fontSize, color,
+    //        2, LINE_AA);
+    //}
 
+    DrawFullText(extendedCanvas, jianju, text, FONT_HERSHEY_SIMPLEX, fontSize, color);
+
+     char name_win[] = "src";//数组，元素为字符
+     namedWindow(name_win, cv::WINDOW_AUTOSIZE);
+    //imshow("src", extendedCanvas);
+    //waitKey(0);
     // 计算旋转中心（扩展画布中心）
-    Point2f center(w2 / 2.0f, h2 / 2.0f);
+    Point2f center(h2 / 2.0f, w2 / 2.0f);
 
     // 执行旋转
     Mat rotMat = getRotationMatrix2D(center, angleDegree, 1.0);
-    Mat rotated;
-    warpAffine(extendedCanvas, rotated, rotMat, extendedCanvas.size(),
-        INTER_LINEAR, BORDER_TRANSPARENT);
+    
+    warpAffine(extendedCanvas, extendedCanvasL, rotMat, extendedCanvasL.size(),
+        INTER_LINEAR, BORDER_TRANSPARENT); 
 
+    imwrite("rotate_mid.png", extendedCanvas);
+    imwrite("rotate_large.png", extendedCanvasL);
     // 计算有效区域
-    Mat alpha;
-    extractChannel(rotated, alpha, 3);
+    /*Mat alpha;
+    extractChannel(rotated, alpha, 4);
     std::vector<Point> nonZeroPoints;
     findNonZero(alpha, nonZeroPoints);
     Rect boundingRect = nonZeroPoints.empty() ?
-        Rect(0, 0, 0, 0) :
-        cv::boundingRect(nonZeroPoints);
+        Rect(0, 0, 0, 0)*/
+    /*imshow("rotate_ori", extendedCanvasL);
+    waitKey(0);*/
 
-    // 计算最终位置偏移
-    finalPosition.x = boundingRect.x - offsetX;
-    finalPosition.y = boundingRect.y - offsetY;
+    Mat rot_res = extendedCanvasL.rowRange(pposx, pposx + h).colRange(pposy, pposy + w);
 
-    return rotated(boundingRect).clone();
+    imwrite("rotate.png", rot_res);
+    /*imshow("rotate", rot_res);
+    waitKey(0);*/
+
+    return rot_res;
 }
 
 BOOL CALLBACK MonitorEnumProc(HMONITOR hMonitor, HDC hdcMonitor, LPRECT lprcMonitor, LPARAM dwData)
@@ -637,27 +696,26 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     switch (msg) {
     case WM_CREATE:
         // 创建定时器
-        SetTimer(hwnd, TIMER_ID, 100, NULL);
-        SetTimer(hwnd, UPDATE_ID, 1000, NULL);
+        
         return 0;
     case WM_TIMER:
-        if (wParam == TIMER_ID) {
-            RECT rect;
-            GetWindowRect(hwnd, &rect);
-            EnumDisplayMonitors(NULL, NULL, MonitorEnumProc, LPARAM(&rect));
+        //if (wParam == TIMER_ID) {
+        //    RECT rect;
+        //    GetWindowRect(hwnd, &rect);
+        //    EnumDisplayMonitors(NULL, NULL, MonitorEnumProc, LPARAM(&rect));
 
-            HWND h_prewnd = GetWindow(hwnd, GW_HWNDFIRST);
-            ::SetWindowPos(hwnd, h_prewnd, rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top, NULL);
-        }
-        else if (wParam == UPDATE_ID) {
-            // UpdateDisplayBuffer(hwnd);
-            UpdateWindowContent(hwnd);
-        }   
+        //    HWND h_prewnd = GetWindow(hwnd, GW_HWNDFIRST);
+        //    ::SetWindowPos(hwnd, h_prewnd, rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top, NULL);
+        //}
+        //else if (wParam == UPDATE_ID) {
+        //    // UpdateDisplayBuffer(hwnd);
+        //    UpdateWindowContent(hwnd);
+        //}   
         return 0;
     case WM_PAINT: {
 
         // UpdateWindowContent(hwnd);
-        UpdateWindowContent(hwnd);
+        // UpdateWindowContent(hwnd);
 
         /*PAINTSTRUCT ps;
         HDC hdc = BeginPaint(hwnd, &ps);*/
@@ -689,7 +747,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         return 0;
     }
     case WM_ERASEBKGND:
-        return 1; // 直接返回，禁止擦除
+        // InvalidateRect(hwnd, NULL, TRUE);
+        return 0; // 直接返回，禁止擦除
     case WM_DESTROY:
         KillTimer(hwnd, TIMER_ID);
         KillTimer(hwnd, UPDATE_ID);
@@ -731,9 +790,11 @@ HWND CreateTransparentWindow(int width, int height) {
     /*SetWindowLong(hwnd, GWL_EXSTYLE, GetWindowLong(hwnd, GWL_EXSTYLE)
         & ~WS_EX_APPWINDOW | WS_EX_TOOLWINDOW | WS_EX_TRANSPARENT | WS_EX_TOPMOST);*/
     SetWindowLong(hwnd, GWL_EXSTYLE, GetWindowLong(hwnd, GWL_EXSTYLE)
-        & ~WS_EX_APPWINDOW | WS_EX_TOOLWINDOW | WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOPMOST);
+        & ~WS_EX_APPWINDOW | WS_EX_TOOLWINDOW | WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOPMOST | WS_OVERLAPPED);
 
-    ::SetLayeredWindowAttributes(hwnd, GetSysColor(CTLCOLOR_DLG), 128, 2 | LWA_COLORKEY);
+    // ::SetLayeredWindowAttributes(hwnd, GetSysColor(CTLCOLOR_DLG), 128, 2 | LWA_COLORKEY);
+    // SetLayeredWindowAttributes(hwnd, 0, 176, LWA_ALPHA);
+    UpdateWindowContent(hwnd);
 
     // 显示窗口
     ShowWindow(hwnd, SW_SHOW);
@@ -798,9 +859,18 @@ void UpdateDisplayBuffer(HWND hwnd) {
     //    Scalar(255, 255, 255, 255), // 白色文字，完全不透明
     //    3, LINE_AA);
 
-    //Point respos;
-    //Mat rotmat = CreateRotatedWatermark(timeStr, 2.0, Scalar(255, 255, 255, 255), 30,
-    //    Size(100, 100), Size(GetSystemMetrics(SM_CYSCREEN), GetSystemMetrics(SM_CXSCREEN)), respos);
+    /*Point respos;
+    respos.x = canvas.cols / 2;
+    respos.y = canvas.rows / 2;
+    
+
+    Mat rotMat = getRotationMatrix2D(respos, 30, 1.0);
+    Mat rotated;
+    warpAffine(canvas, rotated, rotMat, canvas.size(),
+        INTER_LINEAR, BORDER_TRANSPARENT);*/
+
+    Mat rotmat = CreateRotatedWatermark(timeStr, 2.0, Scalar(255, 255, 255, 255), 30,
+        Size(100, 100), Size(GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN)));
 
     ///*Mat trans = getRotationMatrix2D(Point(0, canvas.rows), angle, 1);
     //Mat res()
@@ -810,7 +880,10 @@ void UpdateDisplayBuffer(HWND hwnd) {
     //        rotmat.cols, rotmat.rows)
     //));
     // 更新全局缓冲
-    g_DisplayBuffer = canvas;
+    // g_DisplayBuffer = rotmat;
+    // rotmat.copyTo(g_DisplayBuffer);
+
+    g_DisplayBuffer = rotmat;
 
     // 请求重绘
     // InvalidateRect(hwnd, NULL, FALSE);
@@ -825,6 +898,9 @@ int main() {
         GetSystemMetrics(SM_CYSCREEN)
     );
 
+    SetTimer(hwnd, TIMER_ID, 100, NULL);
+    SetTimer(hwnd, UPDATE_ID, 1000, NULL);
+
     // 初始化OpenCV缓冲
     // UpdateDisplayBuffer(hwnd);
     // UpdateWindowContent(hwnd);
@@ -837,11 +913,31 @@ int main() {
             if (msg.message == WM_QUIT) break;
             TranslateMessage(&msg);
             DispatchMessage(&msg);
+
+            switch (msg.message) {
+            case WM_TIMER:
+                if (msg.wParam == TIMER_ID) {
+                    /*RECT rect;
+                    GetWindowRect(hwnd, &rect);
+                    EnumDisplayMonitors(NULL, NULL, MonitorEnumProc, LPARAM(&rect));
+
+                    HWND h_prewnd = GetWindow(hwnd, GW_HWNDFIRST);
+                    ::SetWindowPos(hwnd, h_prewnd, rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top, NULL);*/
+                }
+                else if (msg.wParam == UPDATE_ID) {
+                    // UpdateDisplayBuffer(hwnd);
+                    UpdateWindowContent(hwnd);
+                }
+            }
         }
         else {
             // 空闲时处理其他任务（可选）
         }
     }
+
+    /*Mat rotmat = CreateRotatedWatermark("wodeshijie hahaha", 2.0, Scalar(255, 255, 255, 255), 30,
+        Size(100, 100), Size(GetSystemMetrics(SM_CYSCREEN), GetSystemMetrics(SM_CXSCREEN)));*/
+
 
     return 0;
 }
