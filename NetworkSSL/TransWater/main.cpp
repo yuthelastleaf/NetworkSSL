@@ -112,7 +112,7 @@ void ConvertMatToCImageWithAlpha(const cv::Mat& src, CImage& dst) {
     CV_Assert(src.type() == CV_8UC4);
 
     // 创建 32 位 CImage（负高度确保 top-down 布局）
-    dst.Create(src.cols, -src.rows, 32, 1);
+    dst.Create(src.cols, -src.rows, 32);
     dst.SetHasAlphaChannel(true);
     if (dst.IsNull()) {
         throw std::runtime_error("Failed to create CImage");
@@ -242,14 +242,56 @@ bool DrawFullText(Mat& drawmat, Size spacing, String text, HersheyFonts font, do
     return true;
 }
 
-bool Mat2HBitmap(HBITMAP& hBmp, Mat& mat)
-{
-    //MAT类的TYPE=（nChannels-1+ CV_8U）<<3int nChannels=(mat.type()>>3)-CV_8U+1;
+//Gdiplus::Bitmap Mat2HBitmap(Mat& mat)
+//{
+//    //MAT类的TYPE=（nChannels-1+ CV_8U）<<3int nChannels=(mat.type()>>3)-CV_8U+1;
+//
+//    /*int iSize = mat.cols * mat.rows * mat.channels();
+//    hBmp = CreateBitmap(mat.cols, mat.rows, 1, mat.channels() * 8, mat.data);*/
+//
+//    /*int size = ((((mat.cols * 32) + 31) & ~31) >> 3) * mat.rows;
+//
+//    Gdiplus::Bitmap* bitmap = new Gdiplus::Bitmap(mat.cols, mat.rows, PixelFormat32bppARGB);
+//    Gdiplus::BitmapData data;
+//    Gdiplus::Rect rect = { 0, 0, mat.cols, mat.rows };
+//    bitmap->LockBits(&rect,
+//        Gdiplus::ImageLockModeWrite, PixelFormat32bppARGB, &data);
+//    memcpy(data.Scan0, mat.data, size);
+//    bitmap->UnlockBits(&data);
+//    bitmap->GetHBITMAP(0, &hBmp);*/
+//
+//    // Gdiplus::Bitmap bitmap(mat.cols, mat.rows, mat.step1(), PixelFormat24bppRGB, mat.data);
+//    Size size = mat.size();
+//    Gdiplus::Bitmap bitmap(size.width, size.height, mat.step1(), PixelFormat24bppRGB, mat.data);
+//    
+//    return bitmap;
+//
+//}
 
-    int iSize = mat.cols * mat.rows * mat.channels();
-    hBmp = CreateBitmap(mat.cols, mat.rows, 1, mat.channels() * 8, mat.data);
-    return true;
 
+int Mat2CImage(Mat* mat, CImage& img) {
+    if (!mat || mat->empty())
+        return -1;
+    int nBPP = mat->channels() * 8;
+    img.Create(mat->cols, mat->rows, nBPP);
+    if (nBPP == 8)
+    {
+        static RGBQUAD pRGB[256];
+        for (int i = 0; i < 256; i++)
+            pRGB[i].rgbBlue = pRGB[i].rgbGreen = pRGB[i].rgbRed = i;
+        img.SetColorTable(0, 256, pRGB);
+    }
+    uchar* psrc = mat->data;
+    uchar* pdst = (uchar*)img.GetBits();
+    int imgPitch = img.GetPitch();
+    for (int y = 0; y < mat->rows; y++)
+    {
+        memcpy(pdst, psrc, mat->cols * mat->channels());//mat->step is incorrect for those images created by roi (sub-images!)
+        psrc += mat->step;
+        pdst += imgPitch;
+    }
+
+    return 0;
 }
 
 // 更新窗口内容（关键函数）
@@ -266,8 +308,11 @@ void UpdateWindowContent(HWND hwnd) {
 
     // 初始化背景为透明（可选）
     CImage image;
-    image.Create(GetSystemMetrics(SM_CXSCREEN),
-        GetSystemMetrics(SM_CYSCREEN), 32, 1);
+    /*image.Create(GetSystemMetrics(SM_CXSCREEN),
+        GetSystemMetrics(SM_CYSCREEN), 32);*/
+    Mat2CImage(&g_DisplayBuffer, image);
+    
+    
     // image.Draw(hdc, { 0, 0,GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN) });
 
     // graphics.Clear(Gdiplus::Color(0, 0, 0, 0));  // ARGB(0,0,0,0) 全透明
@@ -283,17 +328,46 @@ void UpdateWindowContent(HWND hwnd) {
         GetSystemMetrics(SM_CYSCREEN));
     ::SetBkMode(hdcMem, TRANSPARENT);
 
+
+    /*Size size = g_DisplayBuffer.size();
+    Gdiplus::Bitmap bitmap(size.width, size.height, g_DisplayBuffer.step1(), PixelFormat24bppRGB, g_DisplayBuffer.data);
+
+    int bwidth = bitmap.GetWidth();
+    int bheight = bitmap.GetHeight();
+    LPBYTE pBmpBits = NULL;
+    BITMAPINFO bimpi = { 0 };
+    bimpi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    bimpi.bmiHeader.biWidth = bwidth;
+    bimpi.bmiHeader.biHeight = -bheight;
+    bimpi.bmiHeader.biPlanes = 1;
+    bimpi.bmiHeader.biBitCount = 32;
+    bimpi.bmiHeader.biCompression = BI_RGB;
+    bimpi.bmiHeader.biSizeImage = bwidth * bheight * 4;
+    HBITMAP hNewBMP = CreateDIBSection(NULL, &bimpi, DIB_RGB_COLORS, (void**)&pBmpBits, NULL, NULL);
+
+    Gdiplus::BitmapData bitmapData;
+    Gdiplus::Rect rect = { 0, 0, bwidth, bheight };
+    bitmap.LockBits(&rect, Gdiplus::ImageLockModeRead, bitmap.GetPixelFormat(), &bitmapData);
+    memcpy(pBmpBits, (unsigned char*)bitmapData.Scan0, bwidth * bheight * 4);
+    bitmap.UnlockBits(&bitmapData);*/
+    
     // Mat2HBitmap(hbmpMem, g_DisplayBuffer);
+    CImage water_image;
+    // ConvertMatToCImageWithAlpha(g_DisplayBuffer, water_image);
+    
 
 
     // bmp.GetHBITMAP(0, &hbmpMem);
 
+    // HBITMAP hOldBmp = (HBITMAP)SelectObject(hdcMem, hbmpMem);
     HBITMAP hOldBmp = (HBITMAP)SelectObject(hdcMem, hbmpMem);
+    // water_image.Draw(hdcMem, { 0, 0, water_image.GetWidth(), water_image.GetHeight() });
+    image.Draw(hdcMem, { 0, 0, image.GetWidth(), image.GetHeight() });
 
-    CImage srcimage;
+    // CImage srcimage;
 
-    srcimage.Load(L"rotate.png");
-    srcimage.Draw(hdcMem, { 0, 0, srcimage.GetWidth(), srcimage.GetHeight() });
+    // srcimage.Load(L"rotate.png");
+    // srcimage.Draw(hdcMem, { 0, 0, srcimage.GetWidth(), srcimage.GetHeight() });
     // srcimage.Draw(hdc, { 0, 0, srcimage.GetWidth(), srcimage.GetHeight() });
 
     // RECT dcmem_rect = { 0, 0, bmp.GetWidth(), bmp.GetHeight() };
@@ -321,7 +395,7 @@ void UpdateWindowContent(HWND hwnd) {
     blend.SourceConstantAlpha = 128; // 全局透明度
     blend.AlphaFormat = AC_SRC_ALPHA; // 关键参数
     POINT ptDst = { 0, 0 }; // 窗口左上角屏幕坐标
-    SIZE sizeWnd = { srcimage.GetWidth(), srcimage.GetHeight() };
+    SIZE sizeWnd = { g_DisplayBuffer.cols, g_DisplayBuffer.rows };
     POINT ptSrc = { 0, 0 }; // 源图像起始点
     COLORREF laycolor = RGBA(0, 0, 0, 20);
     BOOL bRet = UpdateLayeredWindow(
@@ -585,15 +659,13 @@ Mat CreateRotatedWatermark(
 
     // 原始文字尺寸
     int baseLine = 0;
-    Size textSize = getTextSize(text, FONT_HERSHEY_SIMPLEX,
-        fontSize, 2, &baseLine);
     int w = baseSize.width;
     int h = baseSize.height;
 
-    
+    Size offsize = { 0, 0 };
 
     // 计算扩展画布尺寸
-    double val_sin = sin(θ), val_cos = cos(θ);
+    double val_sin = abs(sin(θ)), val_cos = abs(cos(θ));
 
     int w1 = static_cast<int>((double)w * val_cos + (double)h * val_sin);
     int h1 = static_cast<int>((double)h * val_cos + (double)w * val_sin);
@@ -601,63 +673,34 @@ Mat CreateRotatedWatermark(
     int w2 = w + static_cast<int>(2.0 * (double)h * val_sin * val_cos);
     int h2 = h + static_cast<int>(2.0 * (double)w * val_sin * val_cos);
 
+    if (w2 < w1) {
+        offsize.width = (w1 - w2) / 2;
+        w2 = w1;
+    }
+
+    if (h2 < h1) {
+        offsize.height = (h1 - h2) / 2;
+        h2 = h1;
+    }
+
     int pposx = static_cast<int>((double)w * val_cos * val_sin);
     int pposy = static_cast<int>((double)h * val_cos * val_sin);
 
     // 创建扩展画布
-    Mat extendedCanvas(h1, w1, CV_8UC4, Scalar(0, 0, 0, 0));
     Mat extendedCanvasL(h2, w2, CV_8UC4, Scalar(0, 0, 0, 0));
-    // Mat rotated(h, w, CV_8UC4, Scalar(0, 0, 0, 0));
 
-    //// 计算原始文字在扩展画布中的位置
-    //int offsetX = h * sinθ * cosθ;
-    //int offsetY = w * sinθ * cosθ;
-    //Rect textROI(offsetX, offsetY, w, h);
-
-    //// 在子ROI中绘制原始文字
-    //Mat textArea = extendedCanvas(textROI);
-
-    //std::vector<Point> point_draw = calculateTilingPositions(baseSize, jianju);
-
-    //for (int i = 0; i < point_draw.size(); i++) {
-
-    //    putText(textArea, text, point_draw[i],
-    //        FONT_HERSHEY_SIMPLEX, fontSize, color,
-    //        2, LINE_AA);
-    //}
-
-    DrawFullText(extendedCanvas, jianju, text, FONT_HERSHEY_SIMPLEX, fontSize, color);
-
-     char name_win[] = "src";//数组，元素为字符
-     namedWindow(name_win, cv::WINDOW_AUTOSIZE);
-    //imshow("src", extendedCanvas);
-    //waitKey(0);
+    DrawFullText(extendedCanvasL, jianju, text, FONT_HERSHEY_SIMPLEX, fontSize, color);
     // 计算旋转中心（扩展画布中心）
-    Point2f center(h2 / 2.0f, w2 / 2.0f);
+    Point2f center(extendedCanvasL.cols / 2, extendedCanvasL.rows / 2);
 
     // 执行旋转
     Mat rotMat = getRotationMatrix2D(center, angleDegree, 1.0);
-    
-    warpAffine(extendedCanvas, extendedCanvasL, rotMat, extendedCanvasL.size(),
+
+    warpAffine(extendedCanvasL, extendedCanvasL, rotMat, extendedCanvasL.size(),
         INTER_LINEAR, BORDER_TRANSPARENT); 
 
-    imwrite("rotate_mid.png", extendedCanvas);
-    imwrite("rotate_large.png", extendedCanvasL);
-    // 计算有效区域
-    /*Mat alpha;
-    extractChannel(rotated, alpha, 4);
-    std::vector<Point> nonZeroPoints;
-    findNonZero(alpha, nonZeroPoints);
-    Rect boundingRect = nonZeroPoints.empty() ?
-        Rect(0, 0, 0, 0)*/
-    /*imshow("rotate_ori", extendedCanvasL);
-    waitKey(0);*/
-
-    Mat rot_res = extendedCanvasL.rowRange(pposx, pposx + h).colRange(pposy, pposy + w);
-
-    imwrite("rotate.png", rot_res);
-    /*imshow("rotate", rot_res);
-    waitKey(0);*/
+    Mat rot_res = extendedCanvasL.rowRange(pposx + offsize.height, pposx + offsize.height + h)
+        .colRange(pposy + offsize.width, pposy + offsize.width + w);
 
     return rot_res;
 }
@@ -819,9 +862,9 @@ void UpdateDisplayBuffer(HWND hwnd) {
     // double angle = (double)localTime.tm_sec;
 
     // 创建透明背景
-    Mat canvas(GetSystemMetrics(SM_CYSCREEN),
+    /*Mat canvas(GetSystemMetrics(SM_CYSCREEN),
         GetSystemMetrics(SM_CXSCREEN),
-        CV_8UC4, Scalar(0, 0, 0, 0));
+        CV_8UC4, Scalar(0, 0, 0, 0));*/
 
 
     //// 绘制时间文字（在屏幕右下角显示）
@@ -832,8 +875,8 @@ void UpdateDisplayBuffer(HWND hwnd) {
     //Size textSize = getTextSize(timeStr, FONT_HERSHEY_SIMPLEX,
     //    2.0, 2, &baseLine);
 
-    DrawFullText(canvas, Size(100, 100), timeStr, FONT_HERSHEY_SIMPLEX, 2.0,
-        Scalar(255, 255, 255, 255), 2, LINE_AA);
+    /*DrawFullText(canvas, Size(100, 100), timeStr, FONT_HERSHEY_SIMPLEX, 2.0,
+        Scalar(255, 255, 255, 255), 2, LINE_AA);*/
 
     //std::vector<Point> point_draw = calculateTilingPositions(Size(GetSystemMetrics(SM_CYSCREEN),
     //    GetSystemMetrics(SM_CXSCREEN)), textSize);
@@ -869,7 +912,7 @@ void UpdateDisplayBuffer(HWND hwnd) {
     warpAffine(canvas, rotated, rotMat, canvas.size(),
         INTER_LINEAR, BORDER_TRANSPARENT);*/
 
-    Mat rotmat = CreateRotatedWatermark(timeStr, 2.0, Scalar(255, 255, 255, 255), 30,
+    Mat rotmat = CreateRotatedWatermark(timeStr, 2.0, Scalar(128, 128, 128, 255), 170,
         Size(100, 100), Size(GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN)));
 
     ///*Mat trans = getRotationMatrix2D(Point(0, canvas.rows), angle, 1);
@@ -937,6 +980,8 @@ int main() {
 
     /*Mat rotmat = CreateRotatedWatermark("wodeshijie hahaha", 2.0, Scalar(255, 255, 255, 255), 30,
         Size(100, 100), Size(GetSystemMetrics(SM_CYSCREEN), GetSystemMetrics(SM_CXSCREEN)));*/
+
+    Gdiplus::GdiplusShutdown(gdiplusToken);
 
 
     return 0;
