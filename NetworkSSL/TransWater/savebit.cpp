@@ -92,7 +92,7 @@ WORD ImageHelper::GetBitmapBitCount()
     else if (bits <= 8)
         bitCount = 8;
     else
-        bitCount = 24;
+        bitCount = bits;
 
     return bitCount;
 }
