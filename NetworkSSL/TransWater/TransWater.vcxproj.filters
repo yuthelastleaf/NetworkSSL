@@ -16,6 +16,9 @@
     <Filter Include="savebit">
       <UniqueIdentifier>{f12eaf2d-bfd0-4e80-9ac7-07fde8f3984d}</UniqueIdentifier>
     </Filter>
+    <Filter Include="watermark">
+      <UniqueIdentifier>{bfad5b52-f2a2-4e9d-bc03-a508a104a0e4}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -24,10 +27,16 @@
     <ClCompile Include="savebit.cpp">
       <Filter>savebit</Filter>
     </ClCompile>
+    <ClCompile Include="watermark.cpp">
+      <Filter>watermark</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="savebit.h">
       <Filter>savebit</Filter>
+    </ClInclude>
+    <ClInclude Include="watermark.h">
+      <Filter>watermark</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>
