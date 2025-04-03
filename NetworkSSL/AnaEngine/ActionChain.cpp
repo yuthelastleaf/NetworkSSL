@@ -108,7 +108,7 @@ namespace malware_analysis {
             for (const auto& event : events) {
                 j["events"].push_back(json::parse(event.toJson()));
             }
-        }
+        }`
 
         // 添加子进程
         j["childProcesses"] = json::object();

@@ -19,6 +19,40 @@ namespace malware_analysis {
         CRITICAL
     };
 
+
+    class MatchRule
+    {
+    public:
+        MatchRule();
+        ~MatchRule();
+
+    protected:
+        MatchType match_type_;
+        std::vector<unsigned short> match_status_;
+        std::vector<std::string> match_value_;
+    };
+
+    class Rule : public MatchRule
+    {
+    public:
+        Rule();
+        ~Rule();
+
+    private:
+        std::vector<Rule> match_rule_;
+    };
+
+    class RuleChain
+    {
+    public:
+        RuleChain();
+        ~RuleChain();
+
+    private:
+        std::vector<Rule> rule_chain_;
+    };
+
+
     // 将严重性级别转换为字符串
     std::string severityToString(SeverityLevel level);
 
