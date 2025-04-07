@@ -8,6 +8,8 @@
 #include <optional>
 #include <memory>
 
+#include "yaml-cpp/yaml.h"
+
 namespace malware_analysis {
 
     // 规则严重性级别
@@ -19,138 +21,49 @@ namespace malware_analysis {
         CRITICAL
     };
 
-
-    class MatchRule
+    // 这是或的条件
+    class Rule
     {
     public:
-        MatchRule();
-        ~MatchRule();
-
-    protected:
-        MatchType match_type_;
-        std::vector<unsigned short> match_status_;
-        std::vector<std::string> match_value_;
-    };
-
-    class Rule : public MatchRule
-    {
-    public:
-        Rule();
+        explicit Rule(YAML::Node str_rule);
+        explicit Rule(YAML::Node match_key, YAML::Node value);
         ~Rule();
 
+    public:
+        bool MatchRule(APTEvent& apt_event);
+
     private:
-        std::vector<Rule> match_rule_;
+        void ParseMatch(std::string match_detail);
+
+    private:
+        MatchType match_type_;
+        EventType match_event_;
+        EventProp match_prop_;
+        bool match_all_;
+        unsigned short match_cnt_;
+        std::vector<unsigned short> match_status_;
+        std::vector<std::string> match_value_; // 并
+
+        std::vector<Rule> match_rule_; // 或
     };
 
+    // 这是整条判定链
     class RuleChain
     {
     public:
-        RuleChain();
+        explicit RuleChain(std::string str_chain);
         ~RuleChain();
 
+    public:
+        bool Match(APTEvent& apt_event, unsigned int& offset);
+
     private:
-        std::vector<Rule> rule_chain_;
+        std::map<std::string, Rule> rule_map_;
+        std::vector<Rule> rule_chain_;  
+
+        std::string rule_title_;
+        std::string rule_id_;
+        std::string rule_desc_;
+        std::string rule_level_;
     };
-
-
-    // 将严重性级别转换为字符串
-    std::string severityToString(SeverityLevel level);
-
-    // 将字符串转换为严重性级别
-    SeverityLevel stringToSeverity(const std::string& str);
-
-    // 规则匹配结果
-    struct RuleMatchResult {
-        std::string ruleId;
-        std::string ruleName;
-        std::string description;
-        SeverityLevel severity;
-        std::vector<Event> matchedEvents;
-        std::map<std::string, std::string> metadata;
-
-        // 可选的MITRE ATT&CK映射
-        std::optional<std::string> mitreTactic;
-        std::optional<std::string> mitreTechnique;
-
-        // 转换为JSON
-        std::string toJson() const;
-
-        // 从JSON创建结果对象
-        static RuleMatchResult fromJson(const std::string& json);
-    };
-
-    // 抽象规则接口
-    class Rule {
-    public:
-        virtual ~Rule() = default;
-
-        // 分析一个行为链并返回匹配结果（如果匹配）
-        virtual std::optional<RuleMatchResult> analyze(const BehaviorChain& chain) const = 0;
-
-        // 获取规则ID
-        const std::string& getId() const;
-
-        // 获取规则名称
-        const std::string& getName() const;
-
-        // 获取规则描述
-        const std::string& getDescription() const;
-
-        // 获取规则严重性
-        SeverityLevel getSeverity() const;
-
-        // 设置规则ID
-        void setId(const std::string& id);
-
-        // 设置规则名称
-        void setName(const std::string& name);
-
-        // 设置规则描述
-        void setDescription(const std::string& description);
-
-        // 设置规则严重性
-        void setSeverity(SeverityLevel severity);
-
-        // 设置MITRE ATT&CK战术
-        void setMitreTactic(const std::string& tactic);
-
-        // 设置MITRE ATT&CK技术
-        void setMitreTechnique(const std::string& technique);
-
-        // 添加元数据
-        void addMetadata(const std::string& key, const std::string& value);
-
-        // 转换为JSON
-        virtual std::string toJson() const;
-
-        // 序列化规则
-        virtual std::string serialize() const = 0;
-
-    protected:
-        std::string id;
-        std::string name;
-        std::string description;
-        SeverityLevel severity = SeverityLevel::MEDIUM;
-        std::map<std::string, std::string> metadata;
-
-        // MITRE ATT&CK映射
-        std::optional<std::string> mitreTactic;
-        std::optional<std::string> mitreTechnique;
-    };
-
-    // 规则工厂接口
-    class RuleFactory {
-    public:
-        virtual ~RuleFactory() = default;
-
-        // 从JSON创建规则
-        virtual std::shared_ptr<Rule> createFromJson(const std::string& json) = 0;
-
-        // 从JSON文件创建规则
-        virtual std::vector<std::shared_ptr<Rule>> createFromJsonFile(const std::string& filePath) = 0;
-
-        // 从序列化字符串创建规则
-        virtual std::shared_ptr<Rule> deserialize(const std::string& serialized) = 0;
-    };
-
 } // namespace malware_analysis
