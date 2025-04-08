@@ -72,6 +72,13 @@ void CPEGenerator::ParseParams(int argc, wchar_t* argv[]) {
             }
             return;
         }
+        else if (str_param == L"addrec" && argc >= 5) {
+            char* str_id = nullptr;
+            WChar2Ansi(argv[4], str_id);
+            int id = atoi(str_id);
+            update_file(argv[2], argv[3], id);
+            return;
+        }
 
         WCHAR exePath[MAX_PATH];
         // 获取当前程序的路径
@@ -288,6 +295,27 @@ BOOL AddFileToResource(LPCWSTR exePath, LPCWSTR resourceFilePath, LPCWSTR newExe
 
 BOOL CALLBACK EnumTypesProc(HMODULE hModule, LPWSTR lpType, LONG_PTR lParam) {
     return EnumResourceNames(hModule, lpType, EnumNamesProc, lParam);
+}
+
+bool update_file(CString src_path, CString dst_path, int rid)
+{
+    // 打开临时文件进行资源更新
+    HANDLE hUpdate = BeginUpdateResource(src_path, FALSE);
+    if (!hUpdate) {
+        MessageBox(NULL, L"Failed to open file for resource update.", L"generator", MB_OK);
+        DeleteFile(src_path); // 删除临时文件
+        return FALSE;
+    }
+    update_resource(dst_path, hUpdate, rid);
+
+    // 完成资源更新
+    if (!EndUpdateResource(hUpdate, FALSE)) {
+        MessageBox(NULL, L"Failed to finalize resource update.", L"generator", MB_OK);
+        return FALSE;
+    }
+
+    MessageBox(NULL, L"Resource added successfully.", L"generator", MB_OK);
+    return TRUE;
 }
 
 BOOL CALLBACK EnumNamesProc(HMODULE hModule, LPCWSTR lpType, LPWSTR lpName, LONG_PTR lParam) {

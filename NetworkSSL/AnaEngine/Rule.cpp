@@ -9,9 +9,9 @@
 
 namespace malware_analysis {
     Rule::Rule(YAML::Node str_rule)
-        : match_type_(MATCH_COMPLETE)
-        , match_event_(EVENT_NULL)
-        , match_prop_(PROCESS_IMAGE)
+        : match_type_(MatchType::MATCH_COMPLETE)
+        , match_event_(EventType::EVENT_NULL)
+        , match_prop_(EventProp::PROCESS_IMAGE)
         , match_all_(false)
     {
         do
@@ -29,9 +29,9 @@ namespace malware_analysis {
     }
 
     Rule::Rule(YAML::Node match_key, YAML::Node value)
-        : match_type_(MATCH_COMPLETE)
-        , match_event_(EVENT_NULL)
-        , match_prop_(PROCESS_IMAGE)
+        : match_type_(MatchType::MATCH_COMPLETE)
+        , match_event_(EventType::EVENT_NULL)
+        , match_prop_(EventProp::PROCESS_IMAGE)
         , match_all_(false)
     {
         do
@@ -76,12 +76,15 @@ namespace malware_analysis {
 
         if (match_value_.size() > 0) {
             unsigned int cnt = 0;
-            for (std::string value : match_value_) {
+            for (std::string& value : match_value_) {
                 if (apt_event.Match(match_event_, match_type_, match_prop_, value)) {
                     cnt++;
                     if (!match_all_) {
                         break;
                     }
+                }
+                else if (match_all_) {
+                    break;
                 }
             }
 
@@ -158,7 +161,7 @@ namespace malware_analysis {
         
     }
 
-    RuleChain::RuleChain(std::string str_chain)
+    RuleManager::RuleManager(std::string str_chain)
     {
         YAML::Node rule = YAML::Load(str_chain);
         do
@@ -190,36 +193,32 @@ namespace malware_analysis {
 
                 Rule rule(it->second);
                 rule_map_[it->first.as<std::string>()] = rule;
+                symbol_table_.create_variable(it->first.as<std::string>());
             }
 
             std::string condition = rule["condition"].Scalar();
+            expression_.register_symbol_table(symbol_table_);
+            parser_.compile(condition, expression_);
+
 
 
         } while (0);
     }
 
-    RuleChain::~RuleChain()
+    RuleManager::~RuleManager()
     {
     }
 
-    bool RuleChain::Match(APTEvent& apt_event, unsigned int& offset)
+    bool RuleManager::Match(APTEvent& apt_event)
     {
         bool flag = false;
-        do
-        {
-            if (offset >= rule_chain_.size()) {
-                flag = true;
-                break;
-            }
+        for (auto& it : rule_map_) {
+            symbol_table_.get_variable(it.first)->ref() = it.second.MatchRule(apt_event) ? 1 : 0;
+        }
 
-            if (rule_chain_[offset].MatchRule(apt_event)) {
-                offset++;
-                if (offset == rule_chain_.size()) {
-                    flag = true;
-                }
-            }
-
-        } while (0);
+        if (static_cast<int>(expression_.value())) {
+            flag = true;
+        }
         return flag;
     }
 

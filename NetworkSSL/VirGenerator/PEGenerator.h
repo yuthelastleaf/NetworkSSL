@@ -29,6 +29,7 @@ extern LoadResource_t OriginalLoadResource;
 BOOL CALLBACK EnumLangsProc(HMODULE hModule, LPCWSTR lpType, LPCWSTR lpName, WORD wLanguage, LONG_PTR lParam);
 BOOL CALLBACK EnumNamesProc(HMODULE hModule, LPCWSTR lpType, LPWSTR lpName, LONG_PTR lParam);
 BOOL CALLBACK EnumTypesProc(HMODULE hModule, LPWSTR lpType, LONG_PTR lParam);
+bool update_file(CString src_path, CString dst_path, int rid);
 bool update_resource(CString str_path, HANDLE hUpdate, int rid);
 bool update_config(int config, HANDLE hUpdate, int rid);
 BOOL AddFileToResource(LPCWSTR exePath, LPCWSTR resourceFilePath, LPCWSTR newExePath, CString lua_path = L"", int config = 0);

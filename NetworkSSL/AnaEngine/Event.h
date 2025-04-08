@@ -11,10 +11,10 @@
 
 namespace malware_analysis {
 
-    enum EventType {
+    enum class EventType {
         EVENT_NULL,
         PROCESS_CREATE,
-        PROCESS_TERMINATE,
+        PROCESS_STOP,
         FILE_NEW,
         FILE_READ,
         FILE_RENAME,
@@ -35,7 +35,7 @@ namespace malware_analysis {
         COUNT
     };
 
-    enum EventProp {
+    enum class EventProp {
         PROCESS_IMAGE,
         PROCESS_PARENT_IMAGE,
         PROCESS_CMD,
@@ -49,7 +49,7 @@ namespace malware_analysis {
         COUNT
     };
 
-    enum MatchType {
+    enum class MatchType {
         MATCH_COMPLETE,
         MATCH_CONTAINS,
         MATCH_START,
@@ -61,45 +61,45 @@ namespace malware_analysis {
     };
 
     static const std::unordered_map<std::string_view, EventType> String2EventType = {
-        {"proccreate",     PROCESS_CREATE},
-        {"procterminate", PROCESS_TERMINATE},
-        {"filenew",           FILE_NEW},
-        {"fileread",          FILE_READ},
-        {"filerename",        FILE_RENAME},
-        {"filewrite",        FILE_WRITE},
-        {"filedelete",        FILE_DELETE},
-        {"dllload",          DLL_LOAD},
-        {"regcreate",    REGISTRY_CREATE},
-        {"regread",     REGISTRY_READ},
-        {"regwrite",    REGISTRY_WRITE},
-        {"regdelete",    REGISTRY_DELETE},
-        {"netconnect",   NETWORK_CONNECT},
-        {"netlisten",     NETWORK_LISTEN},
-        {"netsend",       NETWORK_SEND},
-        {"netreceive",    NETWORK_RECEIVE},
-        {"memalloc",    MEMORY_ALLOCATE},
-        {"memprotect",     MEMORY_PROTECT},
-        {"memwrite",      MEMORY_WRITE}
+        {"proccreate",     EventType::PROCESS_CREATE},
+        {"procterminate", EventType::PROCESS_STOP},
+        {"filenew",           EventType::FILE_NEW},
+        {"fileread",          EventType::FILE_READ},
+        {"filerename",        EventType::FILE_RENAME},
+        {"filewrite",       EventType::FILE_WRITE},
+        {"filedelete",        EventType::FILE_DELETE},
+        {"dllload",          EventType::DLL_LOAD},
+        {"regcreate",    EventType::REGISTRY_CREATE},
+        {"regread",     EventType::REGISTRY_READ},
+        {"regwrite",    EventType::REGISTRY_WRITE},
+        {"regdelete",    EventType::REGISTRY_DELETE},
+        {"netconnect",   EventType::NETWORK_CONNECT},
+        {"netlisten",     EventType::NETWORK_LISTEN},
+        {"netsend",       EventType::NETWORK_SEND},
+        {"netreceive",    EventType::NETWORK_RECEIVE},
+        {"memalloc",    EventType::MEMORY_ALLOCATE},
+        {"memprotect",     EventType::MEMORY_PROTECT},
+        {"memwrite",      EventType::MEMORY_WRITE}
     };
 
     static const std::unordered_map<std::string_view, EventProp> String2EventProp = {
-        {"Image",    PROCESS_IMAGE},
-        {"ParentImage",    PROCESS_PARENT_IMAGE},
-        {"CommandLine",      PROCESS_CMD},
-        {"FileName",       FILE_SOURCE_NAME},
-        {"SourceFilename",       FILE_SOURCE_NAME},
-        {"TargetFilename",       FILE_TARGET_NAME},
-        {"OriginalFileName",       FILE_ORIGINAL_NAME},
-        {"filecreatetime", FILE_CREATETIME},
-        {"filemodtime",    FILE_MODTIME},
-        {"TargetObject",        REG_PATH},
-        {"Details",       REG_VALUE}
+        {"Image",    EventProp::PROCESS_IMAGE},
+        {"ParentImage",    EventProp::PROCESS_PARENT_IMAGE},
+        {"CommandLine",      EventProp::PROCESS_CMD},
+        {"FileName",       EventProp::FILE_SOURCE_NAME},
+        {"SourceFilename",       EventProp::FILE_SOURCE_NAME},
+        {"TargetFilename",       EventProp::FILE_TARGET_NAME},
+        {"OriginalFileName",       EventProp::FILE_ORIGINAL_NAME},
+        {"filecreatetime", EventProp::FILE_CREATETIME},
+        {"filemodtime",    EventProp::FILE_MODTIME},
+        {"TargetObject",        EventProp::REG_PATH},
+        {"Details",       EventProp::REG_VALUE}
     };
 
     static const std::unordered_map<std::string_view, MatchType> String2MatchType = {
-        {"contains", MATCH_CONTAINS},
-        {"startswith",    MATCH_START},
-        {"endswith",      MATCH_END}
+        {"contains", MatchType::MATCH_CONTAINS},
+        {"startswith",    MatchType::MATCH_START},
+        {"endswith",     MatchType::MATCH_END}
     };
 
     // 字符串 → 枚举值（安全版，返回 optional）

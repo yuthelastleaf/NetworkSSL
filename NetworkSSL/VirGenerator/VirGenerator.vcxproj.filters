@@ -19,6 +19,9 @@
     <Filter Include="Lua">
       <UniqueIdentifier>{f51ec8d5-19eb-4cf7-8367-b73afea95653}</UniqueIdentifier>
     </Filter>
+    <Filter Include="random">
+      <UniqueIdentifier>{48ea4c58-c0f3-4484-bc28-38d00fd66ece}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="resource.h">
@@ -52,8 +55,11 @@
     <ClCompile Include="LuaFunc.cpp">
       <Filter>Lua</Filter>
     </ClCompile>
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="..\Release\PhDll.dll" />
+    <ClCompile Include="..\..\include\nanoid\src\crypto_random.cpp">
+      <Filter>random</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\include\nanoid\src\nanoid.cpp">
+      <Filter>random</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

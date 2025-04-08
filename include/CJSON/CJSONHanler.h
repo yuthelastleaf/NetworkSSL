@@ -33,6 +33,11 @@ public:
     {
     }
 
+    CJSONHandler(const char* json_str)
+        : m_object({ cJSON_Parse(json_str), nullptr })
+    {
+    }
+
 	~CJSONHandler() {
         if (!m_object.parent) {
             cJSON_Delete(m_object.json_obj);
