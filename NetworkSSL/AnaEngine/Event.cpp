@@ -7,6 +7,27 @@
 
 namespace malware_analysis {
 	
+	EventType ToEventType(std::string_view str) {
+		if (auto it = String2EventType.find(str); it != String2EventType.end()) {
+			return it->second;
+		}
+		return EventType::COUNT;
+	}
+
+	EventProp ToEventProp(std::string_view str) {
+		if (auto it = String2EventProp.find(str); it != String2EventProp.end()) {
+			return it->second;
+		}
+		return EventProp::COUNT;
+	}
+
+	MatchType ToMatchType(std::string_view str) {
+		if (auto it = String2MatchType.find(str); it != String2MatchType.end()) {
+			return it->second;
+		}
+		return MatchType::COUNT;
+	}
+
 	APTEvent::APTEvent(std::string json)
 	{
 		event_prop_.assign(static_cast<int>(EventProp::COUNT), "");
@@ -22,9 +43,9 @@ namespace malware_analysis {
 			return content;
 		};
 
-		event_type_ = static_cast<unsigned int>(String2EventType[getcontent("eventtype").c_str()]);
+		event_type_ = static_cast<unsigned int>(ToEventType(getcontent("eventtype")));
 
-		for (auto it : String2EventProp) {
+		for (auto& it : String2EventProp) {
 			event_prop_[static_cast<int>(it.second)] = getcontent(it.first.data());
 		}
 	}
@@ -63,6 +84,8 @@ namespace malware_analysis {
 			case MatchType::MATCH_END:
 				flag = (event_prop_[static_cast<int>(epindex)].substr(event_prop_[static_cast<int>(epindex)].length() - match_value.length(), match_value.length()) == match_value);
 				break;
+			case MatchType::MATCH_COMPLETE:
+				flag = (event_prop_[static_cast<int>(epindex)] == match_value);
 			}
 		} while (0);
 

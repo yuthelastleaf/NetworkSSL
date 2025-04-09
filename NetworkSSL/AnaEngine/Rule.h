@@ -6,6 +6,7 @@
 #include <optional>
 #include <memory>
 
+#include "Event.h"
 #include "yaml-cpp/yaml.h"
 #include "../../include/exprtk/exprtk.hpp"
 
@@ -24,8 +25,9 @@ namespace malware_analysis {
     class Rule
     {
     public:
-        explicit Rule(YAML::Node str_rule);
-        explicit Rule(YAML::Node match_key, YAML::Node value);
+        Rule();
+        Rule(YAML::Node str_rule);
+        Rule(YAML::Node match_key, YAML::Node value);
         ~Rule();
 
     public:

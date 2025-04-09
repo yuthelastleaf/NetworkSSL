@@ -103,26 +103,9 @@ namespace malware_analysis {
     };
 
     // 字符串 → 枚举值（安全版，返回 optional）
-    std::optional<EventType> ToEventType(std::string_view str) {
-        if (auto it = String2EventType.find(str); it != String2EventType.end()) {
-            return it->second;
-        }
-        return std::nullopt;
-    }
-
-    std::optional<EventProp> ToEventProp(std::string_view str) {
-        if (auto it = String2EventProp.find(str); it != String2EventProp.end()) {
-            return it->second;
-        }
-        return std::nullopt;
-    }
-
-    std::optional<MatchType> ToMatchType(std::string_view str) {
-        if (auto it = String2MatchType.find(str); it != String2MatchType.end()) {
-            return it->second;
-        }
-        return std::nullopt;
-    }
+    EventType ToEventType(std::string_view str);
+    EventProp ToEventProp(std::string_view str);
+    MatchType ToMatchType(std::string_view str);
 
 
     class APTEvent

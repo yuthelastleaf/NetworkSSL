@@ -1,6 +1,6 @@
 
 #include "Rule.h"
-#include "Event.h"
+
 
 #include <vector>
 #include <string>
@@ -8,6 +8,13 @@
 #include <iostream>
 
 namespace malware_analysis {
+    Rule::Rule()
+        : match_type_(MatchType::MATCH_COMPLETE)
+        , match_event_(EventType::EVENT_NULL)
+        , match_prop_(EventProp::PROCESS_IMAGE)
+        , match_all_(false)
+    {
+    }
     Rule::Rule(YAML::Node str_rule)
         : match_type_(MatchType::MATCH_COMPLETE)
         , match_event_(EventType::EVENT_NULL)
@@ -16,7 +23,7 @@ namespace malware_analysis {
     {
         do
         {
-            if (str_rule.IsMap()) {
+            if (!str_rule.IsMap()) {
                 break;
             }
 
@@ -100,10 +107,10 @@ namespace malware_analysis {
             }
         }
         else {
-
+            flag = true;
             for (Rule& rule : match_rule_) {
-                if (rule.MatchRule(apt_event)) {
-                    flag = true;
+                if (!rule.MatchRule(apt_event)) {
+                    flag = false;
                     break;
                 }
             }
@@ -123,20 +130,20 @@ namespace malware_analysis {
                 }
 
                 auto type = ToEventType(str_parse);
-                if (type != std::nullopt) {
-                    match_event_ = *type;
+                if (type != EventType::COUNT) {
+                    match_event_ = type;
                     break;
                 }
 
                 auto prop = ToEventProp(str_parse);
-                if (prop != std::nullopt) {
-                    match_prop_ = *prop;
+                if (prop != EventProp::COUNT) {
+                    match_prop_ = prop;
                     break;
                 }
 
                 auto match = ToMatchType(str_parse);
-                if (match != std::nullopt) {
-                    match_type_ = *match;
+                if (match != MatchType::COUNT) {
+                    match_type_ = match;
                     break;
                 }
 
@@ -170,7 +177,7 @@ namespace malware_analysis {
                 break;
             }
 
-            if (!rule["condition"].IsScalar()) {
+            if (!rule["detection"]["condition"].IsScalar()) {
                 break;
             }
 
@@ -196,7 +203,7 @@ namespace malware_analysis {
                 symbol_table_.create_variable(it->first.as<std::string>());
             }
 
-            std::string condition = rule["condition"].Scalar();
+            std::string condition = rule["detection"]["condition"].Scalar();
             expression_.register_symbol_table(symbol_table_);
             parser_.compile(condition, expression_);
 
