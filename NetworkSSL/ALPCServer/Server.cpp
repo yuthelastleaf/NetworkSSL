@@ -168,10 +168,10 @@ void main()
     WaitForSingleObject(hThread, INFINITE);*/
 
 
-    AlpcHandler::getInstance().registerTask(L"ALEWFP", [](std::shared_ptr<void> ctx) {
+    AlpcHandler::getInstance().registerTask(L"event", [](std::shared_ptr<void> ctx) {
         // 尝试将 void 指针转回 AlpcHandlerCtx
         auto alpcContext = std::static_pointer_cast<AlpcHandlerCtx>(ctx);
-        printf("wfp data: \n%s\n", alpcContext->json_->GetJsonString().get());
+        printf("event data: \n%s\n", alpcContext->json_->GetJsonString().get());
         /*if ((*alpcContext->json_)[L"reply"].GetInt() == 1) {
             (*alpcContext->json_)[L"replymsg"] = L"server_reply_msg";
             AlpcConn* alpc_con = (AlpcConn*)alpcContext->alpc_;
