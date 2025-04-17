@@ -172,11 +172,11 @@ void main()
         // 尝试将 void 指针转回 AlpcHandlerCtx
         auto alpcContext = std::static_pointer_cast<AlpcHandlerCtx>(ctx);
         printf("event data: \n%s\n", alpcContext->json_->GetJsonString().get());
-        /*if ((*alpcContext->json_)[L"reply"].GetInt() == 1) {
-            (*alpcContext->json_)[L"replymsg"] = L"server_reply_msg";
+        if ((*alpcContext->json_)[L"reply"].GetInt() == 1) {
+            (*alpcContext->json_)[L"result"] = 1;
             AlpcConn* alpc_con = (AlpcConn*)alpcContext->alpc_;
             alpc_con->post_msg(*alpcContext->json_, alpcContext->msg_id_);
-        }*/
+        }
         });
 
     /*while (true) {
