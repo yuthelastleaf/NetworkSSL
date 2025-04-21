@@ -198,7 +198,12 @@ static void* CJSON_CDECL internal_malloc(size_t size)
 
 static void CJSON_CDECL internal_free(void* pointer)
 {
-    ExFreePoolWithTag(pointer, CJSONTAG);
+    if (pointer) {
+        // 反正分配的是 nonpagedpool 就不需要带上tag了，因为send会返回 alpc tag
+        // 如果需要释放 paged pool 那么需要带上tag
+        ExFreePool(pointer);
+        pointer = NULL;
+    }
 }
 
 static void* CJSON_CDECL internal_realloc(void* pointer, size_t size, size_t ori_size)
@@ -235,6 +240,26 @@ char* internal_strcpy(char* dst, const char* src) {
     return dst;
 }
 
+static int internal_strcmp(const char* src, const char* dst) {
+    int flag = -1;
+    if (src && dst) {
+        size_t slen = internal_strlen(src);
+        size_t dlen = internal_strlen(dst);
+        if (slen == dlen) {
+            int cmp_len = 0;
+            for (cmp_len = 0; cmp_len < slen; cmp_len++) {
+                if (src[cmp_len] != dst[cmp_len]) {
+                    break;
+                }
+            }
+            if (cmp_len == slen) {
+                flag = 0;
+            }
+        }
+    }
+    return flag;
+}
+
 #else
 /* work around MSVC error C2322: '...' address of dllimport '...' is not static */
 static void * CJSON_CDECL internal_malloc(size_t size)
@@ -256,6 +281,10 @@ size_t internal_strlen(_In_z_ const char* _Str) {
 
 char* internal_strcpy(char* dst, const char* src) {
     return strcpy(dst, src);
+}
+
+int internal_strcmp(const char* src, const char* dst) {
+    return strcmp(src, dst);
 }
 
 #endif
@@ -1453,7 +1482,11 @@ static unsigned char *print(const cJSON * const item, cJSON_bool format, const i
     printbuffer buffer[1];
     unsigned char *printed = NULL;
 
+#ifndef _KERNEL_MODE)
     memset(buffer, 0, sizeof(buffer));
+#else
+    RtlZeroMemory(buffer, sizeof(buffer));
+#endif
 
     /* create buffer */
     buffer->buffer = (unsigned char*) hooks->allocate(default_buffer_size);
@@ -2161,7 +2194,7 @@ static cJSON *get_object_item(const cJSON * const object, const char * const nam
     current_element = object->child;
     if (case_sensitive)
     {
-        while ((current_element != NULL) && (current_element->string != NULL) && (strcmp(name, current_element->string) != 0))
+        while ((current_element != NULL) && (current_element->string != NULL) && (internal_strcmp(name, current_element->string) != 0))
         {
             current_element = current_element->next;
         }
@@ -3343,7 +3376,7 @@ CJSON_PUBLIC(cJSON_bool) cJSON_Compare(const cJSON * const a, const cJSON * cons
             {
                 return false;
             }
-            if (strcmp(a->valuestring, b->valuestring) == 0)
+            if (internal_strcmp(a->valuestring, b->valuestring) == 0)
             {
                 return true;
             }

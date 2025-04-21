@@ -34,10 +34,12 @@ cJSON_bool __stdcall CreateDJson(cDriverJSON** json, const char* str_json)
 
     cJSON* obj = cJSON_Parse(str_json);
 
-    flag = InitDriverJSON(json, obj, NULL);
+    if (obj) {
+        flag = InitDriverJSON(json, obj, NULL);
 
-    if (!flag) {
-        cJSON_Delete(obj);
+        if (!flag) {
+            cJSON_Delete(obj);
+        }
     }
 
     return flag;
@@ -48,6 +50,8 @@ cJSON_bool __stdcall ReleaseDJson(cDriverJSON* json)
     cJSON_bool flag = cJSON_False;
     if (!json->parent && json->json_obj) {
         cJSON_Delete(json->json_obj);
+        // 这里删除json中保留信息的时候一起删除了，所以不用单独删除
+        json = NULL;
     }
     return flag;
 }
@@ -57,7 +61,7 @@ cJSON_bool __stdcall InitDriverJSON(cDriverJSON** json, cJSON* obj, cJSON* paren
     cJSON_bool flag = cJSON_False;
 
     if (*json) {
-        cJSON_free(*json);
+        ReleaseDJson(*json);
     }
     *json = cJSON_malloc(sizeof(cDriverJSON));
     if (!obj) {
@@ -87,6 +91,10 @@ cJSON_bool __stdcall InitDriverJSON(cDriverJSON** json, cJSON* obj, cJSON* paren
         (*json)->setpathwstring = setpathwstring;
 
         flag = cJSON_True;
+    }
+    else {
+        cJSON_free(*json);
+        *json = NULL;
     }
 
 	return flag;

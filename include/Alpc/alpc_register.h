@@ -56,6 +56,21 @@ public:
         taskMap[taskName] = taskFunc;
     }
 
+    // sync handle task 
+    void sync_run_task(std::wstring task_name, std::shared_ptr<void> context) {
+        std::function<void(std::shared_ptr<void>)> task = nullptr;
+        if (!task) {
+            std::lock_guard<std::mutex> lock(taskMapMutex);
+            auto it = taskMap.find(task_name);
+            if (it != taskMap.end()) {
+                task = it->second;  // Ö´ÐÐÈÎÎñ
+            }
+        }
+        if (task) {
+            task(context);
+        }
+    }
+
 private:
     AlpcHandler() : stopFlag(false) {}
 
