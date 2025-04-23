@@ -1,11 +1,13 @@
 #include <Windows.h>
 #include <winternl.h>
 #include <stdio.h>
+#include <future>
 #include "../../include/ntalpcapi.h"
 
 #include "../../include/CJSON/CJSONHanler.h"
 
 #include "../../include/Alpc/alpc_util.h"
+#include "../../include/SingletonTools/AsyncTaskManager.h"
 
 LPVOID CreateMsgMem(PPORT_MESSAGE PortMessage, SIZE_T MessageSize, LPVOID Message)
 {
@@ -171,7 +173,11 @@ void main()
     AlpcHandler::getInstance().registerTask(L"event", [](std::shared_ptr<void> ctx) {
         // 尝试将 void 指针转回 AlpcHandlerCtx
         auto alpcContext = std::static_pointer_cast<AlpcHandlerCtx>(ctx);
-        printf("event data: \n%s\n", alpcContext->json_->GetJsonString().get());
+        // printf("event data: \n%s\n", alpcContext->json_->GetJsonString().get());
+        AsyncTaskManager::GetInstance().AddTask([](std::shared_ptr<void> ctx) {
+            auto alpcContext = std::static_pointer_cast<AlpcHandlerCtx>(ctx);
+            printf("event data: \n%s\n", alpcContext->json_->GetJsonString().get());
+            }, ctx);
         if ((*alpcContext->json_)[L"reply"].GetInt() == 1) {
             (*alpcContext->json_)[L"result"] = 1;
             AlpcConn* alpc_con = (AlpcConn*)alpcContext->alpc_;
