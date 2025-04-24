@@ -11,6 +11,7 @@
 #include "../ntalpcapi.h"
 
 #include "alpc_register.h"
+#include "../../include/SingletonTools/AsyncTaskManager.h"
 
 class AlpcHandlerCtx {
 public:
@@ -187,7 +188,18 @@ public:
                             recvmsg.port_msg_.MessageId, this,
                             std::make_shared<CJSONHandler>((char*)recvmsg.GetDataMem()));
 
-                    if (!(*aptr->json_)[L"reply"].GetInt()) {
+                    AsyncTaskManager::GetInstance().AddTask([](std::shared_ptr<AlpcHandlerCtx> aptr) {
+                        if (!(*aptr->json_)[L"reply"].GetInt()) {
+                            AlpcHandler::getInstance().submit((*aptr->json_)[L"type"].GetWString().get(),
+                                std::static_pointer_cast<void>(aptr));
+                        }
+                        else {
+                            AlpcHandler::getInstance().sync_run_task((*aptr->json_)[L"type"].GetWString().get(),
+                                std::static_pointer_cast<void>(aptr));
+                        }
+                        }, aptr);
+
+                    /*if (!(*aptr->json_)[L"reply"].GetInt()) {
 
                         AlpcHandler::getInstance().submit((*aptr->json_)[L"type"].GetWString().get(),
                             std::static_pointer_cast<void>(aptr));
@@ -195,7 +207,7 @@ public:
                     else {
                         AlpcHandler::getInstance().sync_run_task((*aptr->json_)[L"type"].GetWString().get(),
                             std::static_pointer_cast<void>(aptr));
-                    }
+                    }*/
 
                     /*if (json[L"reply"].GetInt() == 1) {
                         json[L"replymsg"] = L"server_reply_msg";
