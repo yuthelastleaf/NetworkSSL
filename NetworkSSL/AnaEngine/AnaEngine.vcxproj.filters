@@ -21,45 +21,24 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="ActionChain.cpp">
-      <Filter>Engine</Filter>
-    </ClCompile>
-    <ClCompile Include="BehaviorAnalysisEngine.cpp">
-      <Filter>Engine</Filter>
-    </ClCompile>
-    <ClCompile Include="CompositeRule.cpp">
-      <Filter>Engine</Filter>
-    </ClCompile>
     <ClCompile Include="Event.cpp">
       <Filter>Engine</Filter>
     </ClCompile>
     <ClCompile Include="Rule.cpp">
       <Filter>Engine</Filter>
     </ClCompile>
-    <ClCompile Include="StatisticalRule.cpp">
-      <Filter>Engine</Filter>
-    </ClCompile>
     <ClCompile Include="main.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\include\CJSON\cJSON.c">
+      <Filter>Engine</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="ActionChain.h">
-      <Filter>include</Filter>
-    </ClInclude>
-    <ClInclude Include="BehaviorAnalysisEngine.h">
-      <Filter>include</Filter>
-    </ClInclude>
-    <ClInclude Include="CompositeRule.h">
-      <Filter>include</Filter>
-    </ClInclude>
     <ClInclude Include="Event.h">
       <Filter>include</Filter>
     </ClInclude>
     <ClInclude Include="Rule.h">
-      <Filter>include</Filter>
-    </ClInclude>
-    <ClInclude Include="StatisticalRule.h">
       <Filter>include</Filter>
     </ClInclude>
   </ItemGroup>

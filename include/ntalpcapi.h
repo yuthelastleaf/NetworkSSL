@@ -1342,6 +1342,8 @@ typedef PALPC_MESSAGE_ATTRIBUTES(*AlpcGetCompletionListMessageAttributes_FuncTyp
 	);
 
 // 以下为应用层使用
+
+#ifndef _KERNEL_MODE
 NTSYSAPI
 PVOID
 NTAPI
@@ -1418,7 +1420,7 @@ typedef NTSTATUS(NTAPI* RtlGetVersion_FuncType)(
 	PRTL_OSVERSIONINFOW lpVersionInformation
 	);
 
-
+#endif
 /***********************************************************************************************************/
 
 #endif

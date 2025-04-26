@@ -11,6 +11,7 @@
 #include "../ntalpcapi.h"
 
 #include "alpc_register.h"
+#include "../../include/SingletonTools/AsyncTaskManager.h"
 
 class AlpcHandlerCtx {
 public:
@@ -179,7 +180,7 @@ public:
                     HANDLE hclient;
                     ntRet = pfunc_NtAlpcAcceptConnectPort(&hclient, alpc_port_, 0, NULL, NULL, NULL,
                         (PPORT_MESSAGE)requestmsg.GetMsgMem(), NULL, TRUE); // 0
-                    printf("[i] NtAlpcAcceptConnectPort: 0x%X\n", ntRet);
+                    // printf("[i] NtAlpcAcceptConnectPort: 0x%X£¬connected\n", ntRet);
                 }
                 else {
                     std::shared_ptr<AlpcHandlerCtx> aptr =
@@ -187,8 +188,27 @@ public:
                             recvmsg.port_msg_.MessageId, this,
                             std::make_shared<CJSONHandler>((char*)recvmsg.GetDataMem()));
 
-                    AlpcHandler::getInstance().submit((*aptr->json_)[L"type"].GetWString().get(),
-                        std::static_pointer_cast<void>(aptr));
+                    AsyncTaskManager::GetInstance().AddTask([](std::shared_ptr<AlpcHandlerCtx> aptr) {
+                        if (!(*aptr->json_)[L"reply"].GetInt()) {
+                            AlpcHandler::getInstance().submit((*aptr->json_)[L"type"].GetWString().get(),
+                                std::static_pointer_cast<void>(aptr));
+                        }
+                        else {
+                            AlpcHandler::getInstance().sync_run_task((*aptr->json_)[L"type"].GetWString().get(),
+                                std::static_pointer_cast<void>(aptr));
+                        }
+                        }, aptr);
+
+                    /*if (!(*aptr->json_)[L"reply"].GetInt()) {
+
+                        AlpcHandler::getInstance().submit((*aptr->json_)[L"type"].GetWString().get(),
+                            std::static_pointer_cast<void>(aptr));
+                    }
+                    else {
+                        AlpcHandler::getInstance().sync_run_task((*aptr->json_)[L"type"].GetWString().get(),
+                            std::static_pointer_cast<void>(aptr));
+                    }*/
+
                     /*if (json[L"reply"].GetInt() == 1) {
                         json[L"replymsg"] = L"server_reply_msg";
                         std::shared_ptr<char> repstr = json.GetJsonString();

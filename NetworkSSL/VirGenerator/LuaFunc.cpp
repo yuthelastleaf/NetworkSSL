@@ -1,4 +1,5 @@
 #include "LuaFunc.h"
+#include "resource.h"
 
 #include <atlstr.h>
 #include <TlHelp32.h>
@@ -127,7 +128,9 @@ static int l_get_randomstr(lua_State* L) {
 static int l_get_path_md5(lua_State* L) {
     const char* path = luaL_checkstring(L, 1);
     lua_pushstring(L, get_md5(path).c_str());
-    return 1;
+    // lua_pushstring(L, "test");
+    lua_pushinteger(L, GetLastError());
+    return 2;
 }
 
 // ========== messagebox函数 ==========
@@ -185,7 +188,27 @@ static int l_move_file(lua_State* L) {
     const char* newPath = luaL_checkstring(L, 2);
 
     BOOL ok = MoveFileA(oldPath, newPath);
-    lua_pushinteger(L, ok ? 1 : 0);
+    lua_pushinteger(L, ok ? 0 : GetLastError());
+    return 1;
+}
+
+// ========== 2) move_file ==========
+// move file to temp dir, resturn res path
+static int l_move_to_temp(lua_State* L) {
+    const char* movePath = luaL_checkstring(L, 1);
+
+    // 将资源数据写入临时文件
+    char tempPath[MAX_PATH];
+    GetTempPathA(MAX_PATH, tempPath);
+
+    CStringA str_res = tempPath;
+    CStringA str_rand = NANOID_NAMESPACE::generate().c_str();
+    str_res += "\\" + str_rand + ".tmp";
+    BOOL ok = MoveFileA(movePath, str_res);
+    if (!ok) {
+        str_res.Format(str_res + "_%d", GetLastError());
+    }
+    lua_pushstring(L, str_res);
     return 1;
 }
 
@@ -254,12 +277,122 @@ static int l_copy_current_exe(lua_State* L) {
     return 1;
 }
 
+// C++ 实现的 Lua 方法：复制当前封装程序到指定目录
+static int l_copy_current_vir(lua_State* L) {
+    CStringHandler::InitChinese();
+
+
+    // 获取 Lua 参数：目标目录
+    const char* targetpath = luaL_checkstring(L, 1);
+
+    // 加载当前模块
+    HMODULE hModule = GetModuleHandle(NULL);
+    if (!hModule) {
+        // L"Failed to load module. code  = " << GetLastError() << "\n";
+        lua_pushinteger(L, 0);
+        return 0;
+    }
+
+    // 查找资源
+    HRSRC hResource = FindResource(hModule, MAKEINTRESOURCE(IDR_BINARY_FILE), RT_RCDATA);
+    if (!hResource) {
+        // L"Failed to find resource.\n";
+        lua_pushinteger(L, 0);
+        return 0;
+    }
+
+    // 加载资源
+    HGLOBAL hResData = LoadResource(hModule, hResource);
+    if (!hResData) {
+        // << L"Failed to load resource.\n";
+        lua_pushinteger(L, 0);
+        return 0;
+    }
+
+    // 获取资源大小和数据指针
+    DWORD dataSize = SizeofResource(hModule, hResource);
+    void* pData = LockResource(hResData);
+
+    // 将资源数据写入临时文件
+    WCHAR tempPath[MAX_PATH];
+    WCHAR tempFile[MAX_PATH];
+    GetTempPath(MAX_PATH, tempPath);
+    GetTempFileName(tempPath, L"tmp", 0, tempFile);
+
+    std::ofstream outFile(targetpath, std::ios::binary);
+    if (!outFile.is_open()) {
+        // << L"Failed to create temp file.\n";
+        lua_pushinteger(L, 0);
+        return 0;
+    }
+    outFile.write((char*)pData, dataSize);
+    outFile.close();
+    lua_pushinteger(L, 1);
+    return 1;
+}
+
+// C++ 实现的 Lua 方法：复制当前封装程序到指定目录
+static int l_copy_current_rec(lua_State* L) {
+    CStringHandler::InitChinese();
+
+
+    // 获取 Lua 参数：目标目录
+    const long long targeid = luaL_checkinteger(L, 1);
+    const char* targetpath = luaL_checkstring(L, 2);
+    
+
+    // 加载当前模块
+    HMODULE hModule = GetModuleHandle(NULL);
+    if (!hModule) {
+        // L"Failed to load module. code  = " << GetLastError() << "\n";
+        lua_pushinteger(L, 0);
+        return 0;
+    }
+
+    // 查找资源
+    HRSRC hResource = FindResource(hModule, MAKEINTRESOURCE(targeid), RT_RCDATA);
+    if (!hResource) {
+        // L"Failed to find resource.\n";
+        lua_pushinteger(L, 0);
+        return 0;
+    }
+
+    // 加载资源
+    HGLOBAL hResData = LoadResource(hModule, hResource);
+    if (!hResData) {
+        // << L"Failed to load resource.\n";
+        lua_pushinteger(L, 0);
+        return 0;
+    }
+
+    // 获取资源大小和数据指针
+    DWORD dataSize = SizeofResource(hModule, hResource);
+    void* pData = LockResource(hResData);
+
+    // 将资源数据写入临时文件
+    WCHAR tempPath[MAX_PATH];
+    WCHAR tempFile[MAX_PATH];
+    GetTempPath(MAX_PATH, tempPath);
+    GetTempFileName(tempPath, L"tmp", 0, tempFile);
+
+    std::ofstream outFile(targetpath, std::ios::binary);
+    if (!outFile.is_open()) {
+        // << L"Failed to create temp file.\n";
+        lua_pushinteger(L, 0);
+        return 0;
+    }
+    outFile.write((char*)pData, dataSize);
+    outFile.close();
+    lua_pushinteger(L, 1);
+    return 1;
+}
+
 // ========== 3) delete_file ==========
 // delete_file(path) -> int(0/1)
 static int l_delete_file(lua_State* L) {
     const char* path = luaL_checkstring(L, 1);
     BOOL ok = DeleteFileA(path);
-    lua_pushinteger(L, ok ? 1 : 0);
+    lua_pushinteger(L, ok ? 1 : GetLastError());
     return 1;
 }
 
@@ -394,7 +527,8 @@ static int l_get_path_in_proc(lua_State* L) {
     // 获取 Lua 传入的 MD5 值
     const char* md5 = luaL_checkstring(L, 1);
     if (!md5) {
-        lua_pushnil(L);
+        lua_pushstring(L, "");
+        lua_pushstring(L, "");
         return 1;
     }
     std::string target_md5 = md5;
@@ -421,8 +555,8 @@ static int l_get_path_in_proc(lua_State* L) {
         }
     }
 
-    lua_pushnil(L); // 如果没有匹配的文件，返回 nil
-    lua_pushnil(L); // 返回第二个 nil
+    lua_pushstring(L, ""); // 如果没有匹配的文件，返回 nil
+    lua_pushstring(L, ""); // 返回第二个 nil
     return 2; // 返回两个值：第一个和第二个都为 nil
 }
 
@@ -485,7 +619,7 @@ static int l_get_path_in_sysdir(lua_State* L) {
     // 获取 Lua 传入的 MD5 值
     const char* md5 = luaL_checkstring(L, 1);
     if (!md5) {
-        lua_pushnil(L);
+        lua_pushstring(L, "");
         return 1;
     }
     std::string target_md5 = md5;
@@ -510,11 +644,11 @@ static int l_get_path_in_sysdir(lua_State* L) {
         }
 
         // 如果都未找到
-        lua_pushnil(L);
+        lua_pushstring(L, "");
         return 1;
     }
     catch (const std::exception& e) {
-        lua_pushnil(L);
+        lua_pushstring(L, "");
         return 1;
     }
 }
@@ -1191,9 +1325,11 @@ LuaRunner::LuaRunner() {
         lua_register(lua_, "winsleep", l_sleep);
         lua_register(lua_, "create_file", l_create_file);
         lua_register(lua_, "move_file", l_move_file);
+        lua_register(lua_, "move_to_temp", l_move_to_temp);
         lua_register(lua_, "delete_file", l_delete_file);
         lua_register(lua_, "modify_file", l_modify_file);
         lua_register(lua_, "copy_current_exe", l_copy_current_exe);
+        lua_register(lua_, "copy_current_vir", l_copy_current_vir);
         lua_register(lua_, "start_process", l_start_process);
         lua_register(lua_, "kill_process", l_kill_process);
         lua_register(lua_, "add_registry", l_add_registry);
@@ -1221,6 +1357,8 @@ LuaRunner::LuaRunner() {
         lua_register(lua_, "get_pathbysize", l_get_pathbysize);
         lua_register(lua_, "get_ressize", l_get_ressize);
         lua_register(lua_, "get_filesize", l_get_filesize);
+
+        lua_register(lua_, "copy_current_rec", l_copy_current_rec);
 
         lua_register(lua_, "init_chs", l_init_chs);
     }
