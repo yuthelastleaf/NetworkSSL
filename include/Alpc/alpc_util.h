@@ -3,6 +3,7 @@
 #ifdef __cplusplus
 #include <Windows.h>
 #include <winternl.h>
+#include <sddl.h>
 
 #include <thread>
 #include <map>
@@ -111,6 +112,42 @@ public:
 
     }
 
+private:
+    PALPC_MESSAGE_ATTRIBUTES alloc_message_attribute(ULONG ulAttributeFlags) {
+        DEFAPI(AlpcGetHeaderSize);
+        DEFAPI(AlpcInitializeMessageAttribute);
+
+
+        NTSTATUS lSuccess;
+        PALPC_MESSAGE_ATTRIBUTES pAttributeBuffer;
+        LPVOID lpBuffer;
+        ULONG lpReqBufSize = 0;
+        SIZE_T ulAllocBufSize;
+
+        ulAllocBufSize = pfunc_AlpcGetHeaderSize(ulAttributeFlags); // this calculates: sizeof(ALPC_MESSAGE_ATTRIBUTES) + size of attribute structures
+        lpBuffer = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, ulAllocBufSize);
+        if (GetLastError() != 0) {
+            return NULL;
+        }
+        pAttributeBuffer = (PALPC_MESSAGE_ATTRIBUTES)lpBuffer;
+        //wprintf(L"[*] Initializing ReceiveMessage Attributes (0x%X)...", ulAttributeFlags);
+        lSuccess = pfunc_AlpcInitializeMessageAttribute(
+            ulAttributeFlags,	// attributes
+            pAttributeBuffer,	// pointer to attributes structure
+            ulAllocBufSize,	// buffer size
+            &lpReqBufSize
+        );
+        if (!NT_SUCCESS(lSuccess)) {
+            //wprintf(L"Error: 0x%X\n", lSuccess);
+            //pAttributeBuffer->ValidAttributes = ulAttributeFlags;
+            return NULL;
+        }
+        else {
+            //wprintf(L"Success.\n");
+            return pAttributeBuffer;
+        }
+    }
+
 // server
 public:
 
@@ -130,9 +167,38 @@ public:
             str_port += port_name;
 
             pfunc_RtlInitUnicodeString(&usPortName, str_port.c_str());
+
+            SECURITY_QUALITY_OF_SERVICE SecurityQos;
+            SecurityQos.ImpersonationLevel = SecurityIdentification; // SecurityImpersonation; // ; // ; // ;// ;
+            SecurityQos.ContextTrackingMode = SECURITY_STATIC_TRACKING;
+            SecurityQos.EffectiveOnly = 0;
+            SecurityQos.Length = sizeof(SecurityQos);
+
+            // ALPC Port Attributs
+            serverPortAttr.Flags = ALPC_PORTFLG_ALLOW_DUP_OBJECT | ALPC_PORTFLG_ALLOWIMPERSONATION | ALPC_PORTFLG_LRPC_WAKE_POLICY1 | ALPC_PORTFLG_LRPC_WAKE_POLICY2 | ALPC_PORTFLG_LRPC_WAKE_POLICY3; //0xb84a3f0;// ALPC_PORTFLG_ALLOW_DUP_OBJECT | ALPC_PORTFLG_AllowImpersonation | ALPC_PORTFLG_LRPC_WAKE_POLICY1 | ALPC_PORTFLG_LRPC_WAKE_POLICY2 | ALPC_PORTFLG_LRPC_WAKE_POLICY3; // ; //0x8080000;// ALPC_PORFLG_ALLOW_LPC_REQUESTS;// ALPC_PORFLG_ALLOW_LPC_REQUESTS;// | ALPC_PORFLG_SYSTEM_PROCESS;//0x010000 | 0x020000;	// Found '0x3080000' in rpcrt4.dll
+            serverPortAttr.MaxMessageLength = POST_LEN; // technically the hard limit for this is 65535, if no constrains you can use AlpcMaxAllowedMessageLength() to set this limit
+            serverPortAttr.MemoryBandwidth = 512;
+            serverPortAttr.MaxPoolUsage = 0xffffffff;
+            serverPortAttr.MaxSectionSize = 0xffffffff; // 20000;  
+            serverPortAttr.MaxViewSize = 0xffffffff; // 20000; // sizeof(PORT_VIEW); 
+            serverPortAttr.MaxTotalSectionSize = 0xffffffff; // 20000;
+            serverPortAttr.DupObjectTypes = 0xffffffff;
+            RtlSecureZeroMemory(&SecurityQos, sizeof(SecurityQos));
+            serverPortAttr.SecurityQos = SecurityQos;
+
+            LPCWSTR szDACL = L"D:(A;OICI;GAGW;;;AU)";// Allow full control to authenticated users
+
+            PSECURITY_DESCRIPTOR pSD;
+            ULONG ulSDSize = 0;
+            BOOL success = ConvertStringSecurityDescriptorToSecurityDescriptor(
+                szDACL,
+                SDDL_REVISION_1,
+                &pSD,
+                &ulSDSize
+            );
+
             InitializeObjectAttributes(&objPort, &usPortName, 0, 0, 0);
-            RtlSecureZeroMemory(&serverPortAttr, sizeof(serverPortAttr));
-            serverPortAttr.MaxMessageLength = POST_LEN; // For ALPC this can be max of 64KB
+            // RtlSecureZeroMemory(&serverPortAttr, sizeof(serverPortAttr));
 
             NTSTATUS nret = pfunc_NtAlpcCreatePort(&alpc_port_, &objPort, &serverPortAttr);
             if (!nret) {
@@ -223,7 +289,7 @@ public:
 
 // client
 public:
-    bool connect_server(const wchar_t* port_name) {
+    bool connect_server(const wchar_t* port_name, std::string alpc_name) {
         DEFAPI(RtlInitUnicodeString);
         DEFAPI(NtAlpcConnectPort);
 
@@ -234,8 +300,44 @@ public:
         std::wstring str_port = L"\\RPC Control\\";
         str_port += port_name;
         pfunc_RtlInitUnicodeString(&usPort, str_port.c_str());
-        ntRet = pfunc_NtAlpcConnectPort(&alpc_port_, &usPort, NULL, NULL,
-            ALPC_MSGFLG_SYNC_REQUEST, NULL, NULL, NULL, NULL, NULL, NULL);
+
+        ALPC_PORT_ATTRIBUTES    serverPortAttr;
+        SECURITY_QUALITY_OF_SERVICE SecurityQos;
+        SecurityQos.ImpersonationLevel = SecurityIdentification; // SecurityImpersonation; // ; // ; // ;// ;
+        SecurityQos.ContextTrackingMode = SECURITY_STATIC_TRACKING;
+        SecurityQos.EffectiveOnly = 0;
+        SecurityQos.Length = sizeof(SecurityQos);
+
+        // ALPC Port Attributs
+        serverPortAttr.Flags = ALPC_PORTFLG_ALLOW_DUP_OBJECT | ALPC_PORTFLG_ALLOWIMPERSONATION | ALPC_PORTFLG_LRPC_WAKE_POLICY1 | ALPC_PORTFLG_LRPC_WAKE_POLICY2 | ALPC_PORTFLG_LRPC_WAKE_POLICY3; //0xb84a3f0;// ALPC_PORTFLG_ALLOW_DUP_OBJECT | ALPC_PORTFLG_AllowImpersonation | ALPC_PORTFLG_LRPC_WAKE_POLICY1 | ALPC_PORTFLG_LRPC_WAKE_POLICY2 | ALPC_PORTFLG_LRPC_WAKE_POLICY3; // ; //0x8080000;// ALPC_PORFLG_ALLOW_LPC_REQUESTS;// ALPC_PORFLG_ALLOW_LPC_REQUESTS;// | ALPC_PORFLG_SYSTEM_PROCESS;//0x010000 | 0x020000;	// Found '0x3080000' in rpcrt4.dll
+        serverPortAttr.MaxMessageLength = POST_LEN; // technically the hard limit for this is 65535, if no constrains you can use AlpcMaxAllowedMessageLength() to set this limit
+        serverPortAttr.MemoryBandwidth = 512;
+        serverPortAttr.MaxPoolUsage = 0xffffffff;
+        serverPortAttr.MaxSectionSize = 0xffffffff; // 20000;  
+        serverPortAttr.MaxViewSize = 0xffffffff; // 20000; // sizeof(PORT_VIEW); 
+        serverPortAttr.MaxTotalSectionSize = 0xffffffff; // 20000;
+        serverPortAttr.DupObjectTypes = 0xffffffff;
+        RtlSecureZeroMemory(&SecurityQos, sizeof(SecurityQos));
+        serverPortAttr.SecurityQos = SecurityQos;
+
+        LPCWSTR szDACL = L"D:(A;OICI;GAGW;;;AU)";// Allow full control to authenticated users
+
+        PSECURITY_DESCRIPTOR pSD;
+        ULONG ulSDSize = 0;
+        BOOL success = ConvertStringSecurityDescriptorToSecurityDescriptor(
+            szDACL,
+            SDDL_REVISION_1,
+            &pSD,
+            &ulSDSize
+        );
+
+        InitializeObjectAttributes(&objPort, &usPortName, 0, 0, 0);
+        // RtlSecureZeroMemory(&serverPortAttr, sizeof(serverPortAttr));
+
+        PostMsg connect(alpc_name.c_str(), 0, alpc_name.length());
+        SIZE_T conn_size;
+        ntRet = pfunc_NtAlpcConnectPort(&alpc_port_, &usPort, NULL, &serverPortAttr,
+            ALPC_SYNC_CONNECTION, NULL, (PPORT_MESSAGE)connect.GetMsgMem(), NULL, NULL, NULL, NULL);
 
         if (!ntRet) {
             flag = true;
@@ -261,7 +363,7 @@ public:
         PostMsg sendmsg(msg.get(), msgid, strlen(msg.get()));
         PostMsg recvmsg(nullptr);
         SIZE_T recv_len = POST_LEN;
-        NTSTATUS ntRet = sendrecv(alpc_port_, ALPC_MSGFLG_SYNC_REQUEST, (PPORT_MESSAGE)sendmsg.GetMsgMem(), NULL,
+        NTSTATUS ntRet = sendrecv(alpc_port_, ALPC_MSGFLG_REPLY_MESSAGE, (PPORT_MESSAGE)sendmsg.GetMsgMem(), NULL,
             (PPORT_MESSAGE)recvmsg.GetMsgMem(), &recv_len, NULL, NULL);
         if (NT_SUCCESS(ntRet)) {
             recvmsg.update_msg();
@@ -275,6 +377,7 @@ public:
 // 默认的一些类方法
 private:
     HANDLE alpc_port_;
+    std::string alpc_svr_name_;
     NtAlpcSendWaitReceivePort_FuncType sendrecv;
 };
 
@@ -294,7 +397,22 @@ public:
 
     // 示例方法
     bool run_server(const wchar_t* port_name) {
+
+        if (alpc_name_.empty()) {
+            char* str_name;
+            CStringHandler::WChar2Ansi(port_name, str_name);
+            alpc_name_ = str_name;
+        }
         return alpc_server_.create_server(port_name);
+    }
+
+    bool set_alpc_name(const char* aname) {
+        bool flag = false;
+        if (alpc_name_.empty()) {
+            alpc_name_ = aname;
+            flag = true;
+        }
+        return flag;
     }
 
     bool stop_server() {
@@ -305,7 +423,7 @@ public:
         bool flag = false;
         if (alpc_client_.find(port_name) == alpc_client_.end()) {
             AlpcConn new_client;
-            new_client.connect_server(port_name);
+            new_client.connect_server(port_name, alpc_name_);
             alpc_client_[port_name] = new_client;
         }
 
@@ -328,6 +446,7 @@ private:
     // 私有构造函数
     AlpcMng() {
         CStringHandler::InitChinese();
+
         AlpcHandler::getInstance().start(4);
     }
 
@@ -338,6 +457,7 @@ private:
 
 private:
     std::map<std::wstring, AlpcConn> alpc_client_;
+    std::string alpc_name_;
     AlpcConn alpc_server_;
 };
 

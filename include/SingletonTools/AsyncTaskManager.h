@@ -1,5 +1,7 @@
 #pragma once
 
+#include <future>
+
 class AsyncTaskManager {
 public:
     // 获取单例实例
