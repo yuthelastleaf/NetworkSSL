@@ -96,6 +96,27 @@ typedef struct _PORT_DATA_INFORMATION
 #define PORT_TOTAL_MAXIMUM_MESSAGE_LENGTH \
     ((PORT_MAXIMUM_MESSAGE_LENGTH + sizeof(PORT_MESSAGE) + LPC_MAX_CONNECTION_INFO_SIZE + 0xf) & ~0xf)
 
+
+////
+//
+// CONSTANTS, Ω”ø⁄ Ù–‘≈‰÷√
+//
+////
+
+// PORT ATTRIBUTE FLAGS
+#define ALPC_PORTFLG_NONE 0x0
+#define ALPC_PORTFLG_LPCPORT 0x1000 // Only usable in kernel
+#define ALPC_PORTFLG_ALLOWIMPERSONATION 0x10000 // Can be set by client to allow server to impersonation this client
+#define ALPC_PORTFLG_ALLOW_LPC_REQUESTS 0x20000
+#define ALPC_PORTFLG_WAITABLE_PORT 0x40000	// Allow port to be used with synchronization mechanisms like Semaphores
+#define ALPC_PORTFLG_SYSTEM_PROCESS 0x100000 // Only usable in kernel
+#define ALPC_PORTFLG_ALLOW_DUP_OBJECT 0x80000
+#define ALPC_PORTFLG_LRPC_WAKE_POLICY1 0x200000
+#define ALPC_PORTFLG_LRPC_WAKE_POLICY2 0x400000
+#define ALPC_PORTFLG_LRPC_WAKE_POLICY3 0x800000
+#define ALPC_PORTFLG_DIRECT_MESSAGE 0x1000000	// There are 5 queues, Main queue, Direct message queue, Large message queue, Pending queue, Canceled queue... guess this attribute specifies to use the direct message queue instead of main queue
+
+
 typedef struct _LPC_CLIENT_DIED_MSG
 {
 	PORT_MESSAGE PortMsg;
@@ -765,6 +786,12 @@ NtAlpcQueryInformationMessage(
 #define ALPC_MSGFLG_WAIT_USER_MODE 0x100000
 #define ALPC_MSGFLG_WAIT_ALERTABLE 0x200000
 #define ALPC_MSGFLG_WOW64_CALL 0x80000000 // dbg
+
+// ALPC Connection FLAGS
+/// From: https://recon.cx/2008/a/thomas_garnier/LPC-ALPC-paper.pdf
+#define ALPC_SYNC_CONNECTION 0x20000 // Synchronous connection request
+#define ALPC_USER_WAIT_MODE 0x100000 // Wait in user mode
+#define ALPC_WAIT_IS_ALERTABLE 0x200000 // Wait in alertable mode
 
 NTSYSCALLAPI
 NTSTATUS
