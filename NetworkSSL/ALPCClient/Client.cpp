@@ -124,6 +124,23 @@ void main_old()
 
 int main() {
     char            szInput[POST_LEN];
+
+    AlpcHandler::getInstance().registerTask(L"event", [](std::shared_ptr<void> ctx) {
+        // 尝试将 void 指针转回 AlpcHandlerCtx
+        auto alpcContext = std::static_pointer_cast<AlpcHandlerCtx>(ctx);
+        // printf("event data: \n%s\n", alpcContext->json_->GetJsonString().get());
+        AsyncTaskManager::GetInstance().AddTask([](std::shared_ptr<void> ctx) {
+            auto alpcContext = std::static_pointer_cast<AlpcHandlerCtx>(ctx);
+            printf("event data: \n%s\n", alpcContext->json_->GetJsonString().get());
+            }, ctx);
+        if ((*alpcContext->json_)[L"reply"].GetInt() == 1) {
+            (*alpcContext->json_)[L"result"] = 1;
+            AlpcConn::getInstance().post_msg(*alpcContext->json_, alpcContext->alpc_, alpcContext->msg_id_);
+        }
+        });
+
+    AlpcConn::getInstance().start_server(L"yjnalpc");
+
     while (true) {
 
         printf("[.] Enter Message > ");
@@ -138,24 +155,25 @@ int main() {
 
         CJSONHandler json;
         json[L"reply"] = 1;
-        json[L"type"] = szInput;
+        json[L"type"] = "event";
         json[L"name"] = "test";
         json[L"name"] = "bushiba";
         json[L"info"]["notify"] = szInput;
         json[L"newobj"][L"qiantao"][L"lipu"] = L"嵌套对象";
         json[L"name"][L"替换"] = "replace";
         
+        // AlpcMng::getInstance().set_alpc_name("yjnalpc");
         
 
         if (szInput[0] == 's') {
-            AlpcMng::getInstance().notify_msg(L"yjnclient", json, false);
+            AlpcConn::getInstance().notify_msg("yjnclient", json, false);
 
             printf("[i] server Data: ");
             printf("%s\n", json.GetJsonString().get());
 
         }
         else {
-            AlpcMng::getInstance().notify_msg(L"yjnclient", json);
+            AlpcConn::getInstance().notify_msg("yjnclient", json);
         }
     }
 

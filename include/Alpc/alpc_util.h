@@ -24,7 +24,7 @@ public:
 
     // 可以在此添加任意的上下文数据
     ULONG msg_id_;
-    void* alpc_;
+    HANDLE alpc_;
     std::shared_ptr<CJSONHandler> json_;
 };
 
@@ -98,7 +98,7 @@ public:
 
 class AlpcConn
 {
-public:
+private:
     AlpcConn()
         : alpc_port_(0)
         , sendrecv(0)
@@ -241,17 +241,22 @@ public:
 
             if (NT_SUCCESS(ntRet)) {
                 recvmsg.update_msg();
-                if (recvmsg.port_msg_.u1.s1.TotalLength == sizeof(recvmsg.port_msg_)) {
+
+                // if (recvmsg.port_msg_.u1.s1.TotalLength == sizeof(recvmsg.port_msg_)) {
+                if (recvmsg.port_msg_.u2.s2.Type == ALPC_GET_CONNECT) {
                     PostMsg requestmsg(nullptr, recvmsg.port_msg_.MessageId, 0);
                     HANDLE hclient;
                     ntRet = pfunc_NtAlpcAcceptConnectPort(&hclient, alpc_port_, 0, NULL, NULL, NULL,
                         (PPORT_MESSAGE)requestmsg.GetMsgMem(), NULL, TRUE); // 0
                     // printf("[i] NtAlpcAcceptConnectPort: 0x%X，connected\n", ntRet);
+                    printf("connect client name: %s\n", recvmsg.GetDataMem());
+
+                    
                 }
-                else {
+                else if(recvmsg.port_msg_.u2.s2.Type == ALPC_GET_MESSAGE){
                     std::shared_ptr<AlpcHandlerCtx> aptr =
                         std::make_shared<AlpcHandlerCtx>(
-                            recvmsg.port_msg_.MessageId, this,
+                            recvmsg.port_msg_.MessageId, alpc_port_,
                             std::make_shared<CJSONHandler>((char*)recvmsg.GetDataMem()));
 
                     AsyncTaskManager::GetInstance().AddTask([](std::shared_ptr<AlpcHandlerCtx> aptr) {
@@ -264,32 +269,14 @@ public:
                                 std::static_pointer_cast<void>(aptr));
                         }
                         }, aptr);
-
-                    /*if (!(*aptr->json_)[L"reply"].GetInt()) {
-
-                        AlpcHandler::getInstance().submit((*aptr->json_)[L"type"].GetWString().get(),
-                            std::static_pointer_cast<void>(aptr));
-                    }
-                    else {
-                        AlpcHandler::getInstance().sync_run_task((*aptr->json_)[L"type"].GetWString().get(),
-                            std::static_pointer_cast<void>(aptr));
-                    }*/
-
-                    /*if (json[L"reply"].GetInt() == 1) {
-                        json[L"replymsg"] = L"server_reply_msg";
-                        std::shared_ptr<char> repstr = json.GetJsonString();
-                        PostMsg replymsg(repstr.get(), recvmsg.port_msg_.MessageId, strlen(repstr.get()));
-                        ntRet = pfunc_NtAlpcSendWaitReceivePort(alpc_port_, 0, (PPORT_MESSAGE)replymsg.GetMsgMem(),
-                            NULL, NULL, NULL, NULL, NULL);
-                    }*/
                 }
             }
         }
     }
 
 // client
-public:
-    bool connect_server(const wchar_t* port_name, std::string alpc_name) {
+private:
+    bool connect_server(const wchar_t* port_name, std::string alpc_name, HANDLE& hsrv) {
         DEFAPI(RtlInitUnicodeString);
         DEFAPI(NtAlpcConnectPort);
 
@@ -331,25 +318,36 @@ public:
             &ulSDSize
         );
 
-        InitializeObjectAttributes(&objPort, &usPortName, 0, 0, 0);
+        // InitializeObjectAttributes(&objPort, &usPortName, 0, 0, 0);
         // RtlSecureZeroMemory(&serverPortAttr, sizeof(serverPortAttr));
 
         PostMsg connect(alpc_name.c_str(), 0, alpc_name.length());
         SIZE_T conn_size;
-        ntRet = pfunc_NtAlpcConnectPort(&alpc_port_, &usPort, NULL, &serverPortAttr,
+        ntRet = pfunc_NtAlpcConnectPort(&hsrv, &usPort, NULL, &serverPortAttr,
             ALPC_SYNC_CONNECTION, NULL, (PPORT_MESSAGE)connect.GetMsgMem(), NULL, NULL, NULL, NULL);
 
         if (!ntRet) {
             flag = true;
         }
+        else {
+            hsrv = NULL;
+        }
         return flag;
     }
 
-    bool post_msg(CJSONHandler& json, ULONG msgid = 0) {
+
+// 提供的外部方法类
+public:
+    bool post_msg(CJSONHandler& json, HANDLE port = NULL, ULONG msgid = 0) {
         bool flag = false;
         std::shared_ptr<char> msg = json.GetJsonString();
         PostMsg sendmsg(msg.get(), msgid, strlen(msg.get()));
-        NTSTATUS ntRet = sendrecv(alpc_port_, 0, (PPORT_MESSAGE)sendmsg.GetMsgMem(), NULL,
+
+        if (!port) {
+            port = alpc_port_;
+        }
+
+        NTSTATUS ntRet = sendrecv(port, 0, (PPORT_MESSAGE)sendmsg.GetMsgMem(), NULL,
             NULL, NULL, NULL, NULL);
         if (NT_SUCCESS(ntRet)) {
             flag = true;
@@ -357,13 +355,18 @@ public:
         return flag;
     }
 
-    bool send_msg(CJSONHandler& json, ULONG msgid = 0) {
+    bool send_msg(CJSONHandler& json, HANDLE port = NULL, ULONG msgid = 0) {
         bool flag = false;
         std::shared_ptr<char> msg = json.GetJsonString();
         PostMsg sendmsg(msg.get(), msgid, strlen(msg.get()));
         PostMsg recvmsg(nullptr);
         SIZE_T recv_len = POST_LEN;
-        NTSTATUS ntRet = sendrecv(alpc_port_, ALPC_MSGFLG_REPLY_MESSAGE, (PPORT_MESSAGE)sendmsg.GetMsgMem(), NULL,
+
+        if (!port) {
+            port = alpc_port_;
+        }
+
+        NTSTATUS ntRet = sendrecv(port, ALPC_MSGFLG_REPLY_MESSAGE, (PPORT_MESSAGE)sendmsg.GetMsgMem(), NULL,
             (PPORT_MESSAGE)recvmsg.GetMsgMem(), &recv_len, NULL, NULL);
         if (NT_SUCCESS(ntRet)) {
             recvmsg.update_msg();
@@ -374,91 +377,80 @@ public:
     }
 
 
-// 默认的一些类方法
-private:
-    HANDLE alpc_port_;
-    std::string alpc_svr_name_;
-    NtAlpcSendWaitReceivePort_FuncType sendrecv;
-};
-
-
-// 来个单例主要维护发送消息的连接
-class AlpcMng {
-public:
     // 禁止拷贝和赋值
-    AlpcMng(const AlpcMng&) = delete;
-    AlpcMng& operator=(const AlpcMng&) = delete;
+    AlpcConn(const AlpcConn&) = delete;
+    AlpcConn& operator=(const AlpcConn&) = delete;
 
     // 获取单例实例
-    static AlpcMng& getInstance() {
-        static AlpcMng instance;
+    static AlpcConn& getInstance() {
+        static AlpcConn instance;
         return instance;
     }
 
     // 示例方法
-    bool run_server(const wchar_t* port_name) {
+    bool start_server(const wchar_t* port_name) {
 
-        if (alpc_name_.empty()) {
+        if (alpc_svr_name_.empty()) {
             char* str_name;
             CStringHandler::WChar2Ansi(port_name, str_name);
-            alpc_name_ = str_name;
+            alpc_svr_name_ = str_name;
         }
-        return alpc_server_.create_server(port_name);
+        return create_server(port_name);
     }
 
     bool set_alpc_name(const char* aname) {
         bool flag = false;
-        if (alpc_name_.empty()) {
-            alpc_name_ = aname;
+        if (alpc_svr_name_.empty()) {
+            alpc_svr_name_ = aname;
             flag = true;
         }
         return flag;
     }
 
     bool stop_server() {
-        return alpc_server_.disconnect_server();
+        return disconnect_server();
     }
 
-    bool notify_msg(const wchar_t* port_name, CJSONHandler& json, bool post = true) {
+    bool notify_msg(const char* port_name, CJSONHandler& json, bool post = true) {
         bool flag = false;
-        if (alpc_client_.find(port_name) == alpc_client_.end()) {
-            AlpcConn new_client;
-            new_client.connect_server(port_name, alpc_name_);
-            alpc_client_[port_name] = new_client;
+        HANDLE client = NULL;
+        {
+            std::lock_guard<std::mutex> lock(alpc_mtx_);
+            if (alpc_connect_.find(port_name) == alpc_connect_.end()) {
+                wchar_t* wport_name = nullptr;
+                CStringHandler::Ansi2WChar(port_name, wport_name);
+                if (wport_name) {
+                    connect_server(wport_name, alpc_svr_name_, client);
+                    alpc_connect_[port_name] = client;
+                }
+            }
+            else {
+                client = alpc_connect_[port_name];
+            }
         }
-
         if (!post) {
             json[L"reply"] = 1;
-            flag = alpc_client_[port_name].send_msg(json);
+            flag = send_msg(json, client);
         }
         else {
-            flag = alpc_client_[port_name].post_msg(json);
+            flag = post_msg(json, client);
         }
 
         if (!flag) {
-            alpc_client_.erase(port_name);
+            std::lock_guard<std::mutex> lock(alpc_mtx_);
+            alpc_connect_.erase(port_name);
         }
 
         return flag;
     }
 
+// 默认的一些类方法
 private:
-    // 私有构造函数
-    AlpcMng() {
-        CStringHandler::InitChinese();
-
-        AlpcHandler::getInstance().start(4);
-    }
-
-    // 私有析构函数（通常不需要，但可以加以防止意外销毁）
-    ~AlpcMng() {
-        AlpcHandler::getInstance().stop();
-    }
-
-private:
-    std::map<std::wstring, AlpcConn> alpc_client_;
-    std::string alpc_name_;
-    AlpcConn alpc_server_;
+    HANDLE alpc_port_;
+    std::mutex alpc_mtx_;
+    std::string alpc_svr_name_;
+    std::map<std::string, HANDLE> alpc_connect_;
+    NtAlpcSendWaitReceivePort_FuncType sendrecv;
 };
 
 #endif

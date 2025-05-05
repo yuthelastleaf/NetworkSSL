@@ -180,9 +180,18 @@ void main()
             }, ctx);
         if ((*alpcContext->json_)[L"reply"].GetInt() == 1) {
             (*alpcContext->json_)[L"result"] = 1;
-            AlpcConn* alpc_con = (AlpcConn*)alpcContext->alpc_;
-            alpc_con->post_msg(*alpcContext->json_, alpcContext->msg_id_);
+            AlpcConn::getInstance().post_msg(*alpcContext->json_, alpcContext->alpc_, alpcContext->msg_id_);
         }
+        });
+
+    AlpcHandler::getInstance().registerTask(L"connect", [](std::shared_ptr<void> ctx) {
+        // ³¢ÊÔ½« void Ö¸Õë×ª»Ø AlpcHandlerCtx
+        // auto alpcContext = std::static_pointer_cast<PostMsg>(ctx);
+        // printf("event data: \n%s\n", alpcContext->json_->GetJsonString().get());
+        AsyncTaskManager::GetInstance().AddTask([](std::shared_ptr<void> ctx) {
+            auto alpcContext = std::static_pointer_cast<PostMsg>(ctx);
+            printf("connect client name: %s\n", alpcContext->GetDataMem());
+            }, ctx);
         });
 
     /*while (true) {
@@ -192,8 +201,43 @@ void main()
 
         Sleep(1000);
     }*/
-    AlpcMng::getInstance().run_server(L"yjnclient");
+    AlpcConn::getInstance().start_server(L"yjnclient");
     // printf("[!] Shuting down server\n");
+
+    char            szInput[POST_LEN];
+    while (true) {
+
+        printf("[.] Enter Message > ");
+        RtlSecureZeroMemory(&szInput, sizeof(szInput));
+        fgets(szInput, POST_LEN, stdin);
+        // char            szInput[POST_LEN] = "stest123,456";
+
+        size_t len = strlen(szInput);
+        if (len > 0 && szInput[len - 1] == '\n') {
+            szInput[len - 1] = '\0';  // ÓÃ¿Õ×Ö·ûÌæ»» '\n'
+        }
+
+        CJSONHandler json;
+        json[L"reply"] = 1;
+        json[L"type"] = "event";
+        json[L"name"] = "test";
+        json[L"name"] = "bushiba";
+        json[L"info"]["notify"] = szInput;
+        json[L"newobj"][L"qiantao"][L"lipu"] = L"Ç¶Ì×¶ÔÏó";
+        json[L"name"][L"Ìæ»»"] = "replace";
+
+        if (szInput[0] == 's') {
+            AlpcConn::getInstance().notify_msg("yjnalpc", json, false);
+
+            printf("[i] server Data: ");
+            printf("%s\n", json.GetJsonString().get());
+
+        }
+        else {
+            AlpcConn::getInstance().notify_msg("yjnalpc", json);
+        }
+    }
+
     getchar();
     return;
 }
