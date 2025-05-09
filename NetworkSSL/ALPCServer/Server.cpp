@@ -179,7 +179,12 @@ void main()
             printf("event data: \n%s\n", alpcContext->json_->GetJsonString().get());
             }, ctx);
         if ((*alpcContext->json_)[L"reply"].GetInt() == 1) {
-            (*alpcContext->json_)[L"result"] = 1;
+            if(strcmp((*alpcContext->json_)[L"Image"].GetString(), "notepad.exe") == 0) {
+                (*alpcContext->json_)[L"result"] = -1;
+            }
+            else {
+                (*alpcContext->json_)[L"result"] = 1;
+            }
             AlpcConn::getInstance().post_msg(*alpcContext->json_, alpcContext->alpc_, alpcContext->msg_id_);
         }
         });

@@ -323,8 +323,10 @@ private:
 
         PostMsg connect(alpc_name.c_str(), 0, alpc_name.length());
         SIZE_T conn_size;
+        /*ntRet = pfunc_NtAlpcConnectPort(&hsrv, &usPort, NULL, &serverPortAttr,
+            ALPC_SYNC_CONNECTION, NULL, (PPORT_MESSAGE)connect.GetMsgMem(), NULL, NULL, NULL, NULL);*/
         ntRet = pfunc_NtAlpcConnectPort(&hsrv, &usPort, NULL, &serverPortAttr,
-            ALPC_SYNC_CONNECTION, NULL, (PPORT_MESSAGE)connect.GetMsgMem(), NULL, NULL, NULL, NULL);
+            ALPC_SYNC_CONNECTION, NULL, NULL, NULL, NULL, NULL, NULL);
 
         if (!ntRet) {
             flag = true;
@@ -366,7 +368,7 @@ public:
             port = alpc_port_;
         }
 
-        NTSTATUS ntRet = sendrecv(port, ALPC_MSGFLG_REPLY_MESSAGE, (PPORT_MESSAGE)sendmsg.GetMsgMem(), NULL,
+        NTSTATUS ntRet = sendrecv(port, NULL, (PPORT_MESSAGE)sendmsg.GetMsgMem(), NULL,
             (PPORT_MESSAGE)recvmsg.GetMsgMem(), &recv_len, NULL, NULL);
         if (NT_SUCCESS(ntRet)) {
             recvmsg.update_msg();
