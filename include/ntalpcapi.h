@@ -1,4 +1,4 @@
-#pragma once
+Ôªø#pragma once
 #ifndef _NTLPCAPI_H
 #define _NTLPCAPI_H
 
@@ -103,7 +103,7 @@ typedef struct _PORT_DATA_INFORMATION
 
 ////
 //
-// CONSTANTS, Ω”ø⁄ Ù–‘≈‰÷√
+// CONSTANTS, Êé•Âè£Â±ûÊÄßÈÖçÁΩÆ
 //
 ////
 
@@ -1047,7 +1047,7 @@ AlpcGetCompletionListMessageAttributes(
 	_In_ PPORT_MESSAGE Message
 );
 
-/******************************************…˘√˜Œ¥ŒƒµµªØ∑Ω∑®***********************************************/
+/******************************************Â£∞ÊòéÊú™ÊñáÊ°£ÂåñÊñπÊ≥ï***********************************************/
 
 // NTSTATUS ZwClose(HANDLE Handle);
 
@@ -1128,11 +1128,36 @@ ZwAlpcDisconnectPort(
 	_In_ ULONG Flags
 );
 
+/*********************************************ËøõÁ®ãÁõ∏ÂÖ≥API******************************************************/
+
+#define PROCESS_ALL_ACCESS (STANDARD_RIGHTS_REQUIRED | SYNCHRONIZE | 0xFFFF)
+#define PROCESS_CREATE_PROCESS 0x0080
+#define PROCESS_CREATE_THREAD 0x0002
+#define PROCESS_DUP_HANDLE 0x0040	
+#define PROCESS_QUERY_INFORMATION 0x0400
+#define PROCESS_QUERY_LIMITED_INFORMATION 0x1000
+#define PROCESS_SET_INFORMATION 0x0200
+#define PROCESS_SET_QUOTA 0x0100
+#define PROCESS_SUSPEND_RESUME 0x0800
+#define PROCESS_TERMINATE 0x0001
+#define PROCESS_VM_OPERATION 0x0008
+#define PROCESS_VM_READ 0x0010
+#define PROCESS_VM_WRITE 0x0020
+#define SYNCHRONIZE 0x001000000L
+
+NTSTATUS WINAPI ZwQueryInformationProcess(
+	_In_ HANDLE ProcessHandle,
+	_In_ PROCESSINFOCLASS ProcessInformationClass,
+	_Out_ PVOID ProcessInformation,
+	_In_ ULONG ProcessInformationLength,
+	_Out_opt_ PULONG ReturnLength
+);
+
 
 /***********************************************************************************************************/
 
 #ifdef _KERNEL_MODE
-// …˘√˜œµÕ≥api£¨∑¿÷π”ÎÕ∑Œƒº˛÷ÿ∂®“Â¡À
+// Â£∞ÊòéÁ≥ªÁªüapiÔºåÈò≤Ê≠¢‰∏éÂ§¥Êñá‰ª∂ÈáçÂÆö‰πâ‰∫Ü
 NTKERNELAPI
 UCHAR*
 PsGetProcessImageFileName(
@@ -1153,7 +1178,7 @@ PsGetCurrentProcessId(
 );
 #endif
 
-/******************************************∂®“ÂŒ™∫Ø ˝÷∏’Î¿‡–Õ***********************************************/
+/******************************************ÂÆö‰πâ‰∏∫ÂáΩÊï∞ÊåáÈíàÁ±ªÂûã***********************************************/
 typedef NTSTATUS(*NtAlpcCreatePort_FuncType)(
 	_Out_ PHANDLE PortHandle,
 	_In_opt_ POBJECT_ATTRIBUTES ObjectAttributes,
@@ -1372,7 +1397,7 @@ typedef PALPC_MESSAGE_ATTRIBUTES(*AlpcGetCompletionListMessageAttributes_FuncTyp
 	_In_ PPORT_MESSAGE Message
 	);
 
-// “‘œ¬Œ™”¶”√≤„ π”√
+// ‰ª•‰∏ã‰∏∫Â∫îÁî®Â±Ç‰ΩøÁî®
 
 #ifndef _KERNEL_MODE
 NTSYSAPI
