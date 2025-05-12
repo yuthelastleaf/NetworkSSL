@@ -1458,7 +1458,7 @@ typedef NTSTATUS(NTAPI* RtlGetVersion_FuncType)(
 
 // end_private
 #ifndef MAX_MSG_LEN
-#define MAX_MSG_LEN 0x400
+#define MAX_MSG_LEN 0x800
 #endif
 
 #ifdef _KERNEL_MODE
