@@ -6,6 +6,7 @@
 #pragma warning(disable: 4201)
 
 #ifdef _KERNEL_MODE
+#include <ntddk.h> 
 #include <wdm.h>
 #endif
 #include <windef.h>
@@ -1483,7 +1484,7 @@ typedef NTSTATUS(NTAPI* RtlGetVersion_FuncType)(
 
 // end_private
 #ifndef MAX_MSG_LEN
-#define MAX_MSG_LEN 0x800
+#define MAX_MSG_LEN 0x1000
 #endif
 
 #ifdef _KERNEL_MODE
