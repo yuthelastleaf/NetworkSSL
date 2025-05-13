@@ -14,6 +14,94 @@
 #include "alpc_register.h"
 #include "../../include/SingletonTools/AsyncTaskManager.h"
 
+class CommUtil {
+public:
+    static std::wstring NtPathToDosPath(const std::wstring& NtPath)
+    {
+        WCHAR deviceName[MAX_PATH];
+        WCHAR driveName[3] = L" :";
+        DWORD dwDrives = GetLogicalDrives();
+
+        // 遍历所有可能的驱动器盘符
+        for (int i = 0; i < 26; i++)
+        {
+            if ((dwDrives & (1 << i)) == 0)
+                continue;
+
+            // 构建驱动器名称（如 "C:"）
+            driveName[0] = 'A' + i;
+
+            // 获取驱动器的设备路径
+            if (QueryDosDeviceW(driveName, deviceName, MAX_PATH))
+            {
+                size_t deviceNameLen = wcslen(deviceName);
+
+                if (_wcsnicmp(NtPath.c_str(), deviceName, deviceNameLen) == 0 &&
+                    (NtPath[deviceNameLen] == L'\\' || NtPath[deviceNameLen] == L'\0'))
+                {
+                    // 构建DOS路径
+                    std::wstring DosPath = driveName;
+                    DosPath += L"\\";
+
+                    // 添加剩余路径部分（如果有）
+                    if (NtPath.length() > deviceNameLen)
+                    {
+                        DosPath += NtPath.substr(deviceNameLen + 1);
+                    }
+
+                    return DosPath;
+                }
+            }
+        }
+
+        // 处理网络路径和其他特殊情况
+        if (NtPath.substr(0, 12) == L"\\Device\\Mup\\")
+        {
+            return L"\\\\" + NtPath.substr(12);
+        }
+
+        // 如果没有找到匹配，就返回原始NT路径
+        return NtPath;
+    }
+
+    static std::wstring DosPathToNtPath(const std::wstring& DosPath)
+    {
+        WCHAR driveName[3] = L" :";
+        WCHAR deviceName[MAX_PATH];
+
+        // 检查是否是UNC路径（网络路径）
+        if (DosPath.substr(0, 2) == L"\\\\")
+        {
+            return L"\\Device\\Mup\\" + DosPath.substr(2);
+        }
+
+        // 检查是否是有效的驱动器路径
+        if (DosPath.length() >= 2 && iswalpha(DosPath[0]) && DosPath[1] == L':')
+        {
+            driveName[0] = DosPath[0];
+
+            // 获取设备路径
+            if (QueryDosDeviceW(driveName, deviceName, MAX_PATH))
+            {
+                std::wstring NtPath = deviceName;
+
+                // 添加路径的其余部分
+                if (DosPath.length() > 2 && DosPath[2] == L'\\')
+                {
+                    NtPath += DosPath.substr(2);
+                }
+
+                return NtPath;
+            }
+        }
+
+        // 无法转换，返回空字符串
+        return L"";
+    }
+
+};
+
+
 class AlpcHandlerCtx {
 public:
     AlpcHandlerCtx(ULONG msg_id, void* alpc, std::shared_ptr<CJSONHandler> json)
@@ -249,7 +337,7 @@ public:
                     ntRet = pfunc_NtAlpcAcceptConnectPort(&hclient, alpc_port_, 0, NULL, NULL, NULL,
                         (PPORT_MESSAGE)requestmsg.GetMsgMem(), NULL, TRUE); // 0
                     // printf("[i] NtAlpcAcceptConnectPort: 0x%X，connected\n", ntRet);
-                    printf("connect client name: %s\n", recvmsg.GetDataMem());
+                    // printf("connect client name: %s\n", recvmsg.GetDataMem());
 
                     
                 }

@@ -171,12 +171,16 @@ void main()
 
 
     AlpcHandler::getInstance().registerTask(L"event", [](std::shared_ptr<void> ctx) {
-        // 尝试将 void 指针转回 AlpcHandlerCtx
         auto alpcContext = std::static_pointer_cast<AlpcHandlerCtx>(ctx);
-        // printf("event data: \n%s\n", alpcContext->json_->GetJsonString().get());
         AsyncTaskManager::GetInstance().AddTask([](std::shared_ptr<void> ctx) {
             auto alpcContext = std::static_pointer_cast<AlpcHandlerCtx>(ctx);
-            printf("event data: \n%s\n", alpcContext->json_->GetJsonString().get());
+            printf("event data: 0x%X\n%s\n", &alpcContext->json_, alpcContext->json_->GetJsonString().get());
+            // DualString full_path((*alpcContext->json_)["FullImage"].GetString());
+            //DualString parent_full_path((*alpcContext->json_)["ParentFullImage"].GetString());
+            /*printf("full path data \n full:%s \n parent : %s\n", full_path.GetAnsi(), parent_full_path.GetAnsi());
+            wprintf(L"transform full path data \n full:%s \n parent : %s\n", CommUtil::NtPathToDosPath(full_path.GetWide()).c_str(),
+                CommUtil::NtPathToDosPath(parent_full_path.GetWide()).c_str());*/
+
             }, ctx);
         if ((*alpcContext->json_)[L"reply"].GetInt() == 1) {
             if(strcmp((*alpcContext->json_)[L"Image"].GetString(), "notepad.exe") == 0) {

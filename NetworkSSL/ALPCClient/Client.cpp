@@ -68,6 +68,7 @@ void main_old()
             CJSONHandler json;
             json[L"name"] = "test";
             json[L"name"] = "bushiba";
+            json[L"type"] = "hideproc";
             json[L"info"] = "hhh";
             json[L"newobj"][L"qiantao"][L"lipu"] = L"Ç¶Ì×¶ÔÏó";
             json[L"name"][L"Ìæ»»"] = "replace";
@@ -154,8 +155,8 @@ int main() {
         }
 
         CJSONHandler json;
-        json[L"reply"] = 1;
-        json[L"type"] = "event";
+        // json[L"reply"] = 1;
+        json[L"type"] = "hideproc";
         json[L"name"] = "test";
         json[L"name"] = "bushiba";
         json[L"info"]["notify"] = szInput;
@@ -166,14 +167,14 @@ int main() {
         
 
         if (szInput[0] == 's') {
-            AlpcConn::getInstance().notify_msg("yjnclient", json, false);
+            AlpcConn::getInstance().notify_msg("llprocflt", json);
 
-            printf("[i] server Data: ");
-            printf("%s\n", json.GetJsonString().get());
+           /* printf("[i] server Data: ");
+            printf("%s\n", json.GetJsonString().get());*/
 
         }
         else {
-            AlpcConn::getInstance().notify_msg("yjnclient", json);
+            AlpcConn::getInstance().notify_msg("llprocflt", json);
         }
     }
 

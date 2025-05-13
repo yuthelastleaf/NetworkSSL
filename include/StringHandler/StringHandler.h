@@ -238,6 +238,298 @@ namespace CStringHandler {
 
 }
 
+class DualString {
+private:
+    char* m_ansiStr;
+    wchar_t* m_wideStr;
+    bool m_ownAnsi;    // 标记是否拥有ansi字符串的内存
+    bool m_ownWide;    // 标记是否拥有宽字符串的内存
+    bool m_converted;  // 标记是否已经进行了转换
+
+    // 释放资源
+    void FreeMemory() {
+        if (m_ansiStr && m_ownAnsi) {
+            delete[] m_ansiStr;
+            m_ansiStr = nullptr;
+        }
+
+        if (m_wideStr && m_ownWide) {
+            delete[] m_wideStr;
+            m_wideStr = nullptr;
+        }
+
+        m_ownAnsi = false;
+        m_ownWide = false;
+        m_converted = false;
+    }
+
+    // 宽字符转换为窄字符 (懒转换)
+    bool ConvertWideToAnsi() {
+        if (m_ansiStr && m_converted) {
+            return true;  // 已经转换过了
+        }
+
+        if (!m_wideStr) {
+            return false;  // 没有源字符串
+        }
+
+        // 如果已有ansi字符串但不拥有它，先释放引用
+        if (m_ansiStr && !m_ownAnsi) {
+            m_ansiStr = nullptr;
+        }
+
+        char* newAnsi = nullptr;
+        bool result = CStringHandler::WChar2Ansi(m_wideStr, newAnsi);
+
+        if (result) {
+            // 如果已经拥有ansi字符串，先释放它
+            if (m_ansiStr && m_ownAnsi) {
+                delete[] m_ansiStr;
+            }
+
+            m_ansiStr = newAnsi;
+            m_ownAnsi = true;
+            m_converted = true;
+        }
+
+        return result;
+    }
+
+    // 窄字符转换为宽字符 (懒转换)
+    bool ConvertAnsiToWide() {
+        if (m_wideStr && m_converted) {
+            return true;  // 已经转换过了
+        }
+
+        if (!m_ansiStr) {
+            return false;  // 没有源字符串
+        }
+
+        // 如果已有宽字符串但不拥有它，先释放引用
+        if (m_wideStr && !m_ownWide) {
+            m_wideStr = nullptr;
+        }
+
+        wchar_t* newWide = nullptr;
+        bool result = CStringHandler::Ansi2WChar(m_ansiStr, newWide);
+
+        if (result) {
+            // 如果已经拥有宽字符串，先释放它
+            if (m_wideStr && m_ownWide) {
+                delete[] m_wideStr;
+            }
+
+            m_wideStr = newWide;
+            m_ownWide = true;
+            m_converted = true;
+        }
+
+        return result;
+    }
+
+public:
+
+    // 从窄字符构造
+    explicit DualString(const char* ansiStr, bool makeCopy = true)
+        : m_wideStr(nullptr), m_ownWide(false), m_converted(false) {
+        if (ansiStr) {
+            if (makeCopy) {
+                size_t len = strlen(ansiStr) + 1;
+                m_ansiStr = new char[len];
+                strcpy_s(m_ansiStr, len, ansiStr);
+                m_ownAnsi = true;
+            }
+            else {
+                m_ansiStr = const_cast<char*>(ansiStr);
+                m_ownAnsi = false;
+            }
+        }
+        else {
+            m_ansiStr = nullptr;
+            m_ownAnsi = false;
+        }
+    }
+
+    // 从宽字符构造
+    explicit DualString(const wchar_t* wideStr, bool makeCopy = true)
+        : m_ansiStr(nullptr), m_ownAnsi(false), m_converted(false) {
+        if (wideStr) {
+            if (makeCopy) {
+                size_t len = wcslen(wideStr) + 1;
+                m_wideStr = new wchar_t[len];
+                wcscpy_s(m_wideStr, len, wideStr);
+                m_ownWide = true;
+            }
+            else {
+                m_wideStr = const_cast<wchar_t*>(wideStr);
+                m_ownWide = false;
+            }
+        }
+        else {
+            m_wideStr = nullptr;
+            m_ownWide = false;
+        }
+    }
+
+    // 析构函数
+    ~DualString() {
+        FreeMemory();
+    }
+
+    // 复制构造函数
+    DualString(const DualString& other) : m_ansiStr(nullptr), m_wideStr(nullptr),
+        m_ownAnsi(false), m_ownWide(false), m_converted(false) {
+        if (other.m_ansiStr) {
+            size_t len = strlen(other.m_ansiStr) + 1;
+            m_ansiStr = new char[len];
+            strcpy_s(m_ansiStr, len, other.m_ansiStr);
+            m_ownAnsi = true;
+        }
+
+        if (other.m_wideStr) {
+            size_t len = wcslen(other.m_wideStr) + 1;
+            m_wideStr = new wchar_t[len];
+            wcscpy_s(m_wideStr, len, other.m_wideStr);
+            m_ownWide = true;
+        }
+
+        m_converted = other.m_converted;
+    }
+
+    // 移动构造函数
+    DualString(DualString&& other) noexcept : m_ansiStr(other.m_ansiStr), m_wideStr(other.m_wideStr),
+        m_ownAnsi(other.m_ownAnsi), m_ownWide(other.m_ownWide),
+        m_converted(other.m_converted) {
+        other.m_ansiStr = nullptr;
+        other.m_wideStr = nullptr;
+        other.m_ownAnsi = false;
+        other.m_ownWide = false;
+        other.m_converted = false;
+    }
+
+    // 赋值运算符
+    DualString& operator=(const DualString& other) {
+        if (this != &other) {
+            FreeMemory();
+
+            if (other.m_ansiStr) {
+                size_t len = strlen(other.m_ansiStr) + 1;
+                m_ansiStr = new char[len];
+                strcpy_s(m_ansiStr, len, other.m_ansiStr);
+                m_ownAnsi = true;
+            }
+
+            if (other.m_wideStr) {
+                size_t len = wcslen(other.m_wideStr) + 1;
+                m_wideStr = new wchar_t[len];
+                wcscpy_s(m_wideStr, len, other.m_wideStr);
+                m_ownWide = true;
+            }
+
+            m_converted = other.m_converted;
+        }
+        return *this;
+    }
+
+    // 移动赋值运算符
+    DualString& operator=(DualString&& other) noexcept {
+        if (this != &other) {
+            FreeMemory();
+
+            m_ansiStr = other.m_ansiStr;
+            m_wideStr = other.m_wideStr;
+            m_ownAnsi = other.m_ownAnsi;
+            m_ownWide = other.m_ownWide;
+            m_converted = other.m_converted;
+
+            other.m_ansiStr = nullptr;
+            other.m_wideStr = nullptr;
+            other.m_ownAnsi = false;
+            other.m_ownWide = false;
+            other.m_converted = false;
+        }
+        return *this;
+    }
+
+    // 获取窄字符串，如果没有则尝试转换
+    const char* GetAnsi() {
+        if (!m_ansiStr && m_wideStr) {
+            ConvertWideToAnsi();
+        }
+        return m_ansiStr;
+    }
+
+    // 获取宽字符串，如果没有则尝试转换
+    const wchar_t* GetWide() {
+        if (!m_wideStr && m_ansiStr) {
+            ConvertAnsiToWide();
+        }
+        return m_wideStr;
+    }
+
+    // 重置为新的窄字符串
+    void SetAnsi(const char* ansiStr, bool makeCopy = true) {
+        FreeMemory();
+
+        if (ansiStr) {
+            if (makeCopy) {
+                size_t len = strlen(ansiStr) + 1;
+                m_ansiStr = new char[len];
+                strcpy_s(m_ansiStr, len, ansiStr);
+                m_ownAnsi = true;
+            }
+            else {
+                m_ansiStr = const_cast<char*>(ansiStr);
+                m_ownAnsi = false;
+            }
+        }
+    }
+
+    // 重置为新的宽字符串
+    void SetWide(const wchar_t* wideStr, bool makeCopy = true) {
+        FreeMemory();
+
+        if (wideStr) {
+            if (makeCopy) {
+                size_t len = wcslen(wideStr) + 1;
+                m_wideStr = new wchar_t[len];
+                wcscpy_s(m_wideStr, len, wideStr);
+                m_ownWide = true;
+            }
+            else {
+                m_wideStr = const_cast<wchar_t*>(wideStr);
+                m_ownWide = false;
+            }
+        }
+    }
+
+    // 检查是否为空
+    bool IsEmpty() const {
+        return (m_ansiStr == nullptr && m_wideStr == nullptr);
+    }
+
+    // 获取窄字符串长度
+    size_t GetAnsiLength() {
+        if (!m_ansiStr && m_wideStr) {
+            ConvertWideToAnsi();
+        }
+        return m_ansiStr ? strlen(m_ansiStr) : 0;
+    }
+
+    // 获取宽字符串长度
+    size_t GetWideLength() {
+        if (!m_wideStr && m_ansiStr) {
+            ConvertAnsiToWide();
+        }
+        return m_wideStr ? wcslen(m_wideStr) : 0;
+    }
+
+    // 清空字符串
+    void Clear() {
+        FreeMemory();
+    }
+};
+
 
 
 
