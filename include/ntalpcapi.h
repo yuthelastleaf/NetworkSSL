@@ -1154,6 +1154,64 @@ NTSTATUS WINAPI ZwQueryInformationProcess(
 	_Out_opt_ PULONG ReturnLength
 );
 
+#define EXHANDLE_TABLE_ENTRY_LOCK_BIT    1
+
+typedef struct _HANDLE_TABLE_ENTRY {
+	union {
+		VOID* Object;
+		ULONG_PTR Value;
+	} u1;
+	union {
+		ULONG GrantedAccess;
+		ULONG_PTR NextFreeTableEntry;
+	} u2;
+} HANDLE_TABLE_ENTRY, * PHANDLE_TABLE_ENTRY;
+
+typedef struct _HANDLE_TABLE_WIN8 {
+	ULONG NextHandleNeedingPool;
+	LONG ExtraInfoPages;
+	volatile ULONG TableCode;
+	struct _EPROCESS* QuotaProcess;
+	struct _LIST_ENTRY HandleTableList;
+	ULONG UniqueProcessId;
+	ULONG Flags;
+	EX_PUSH_LOCK HandleContentionEvent;
+	EX_PUSH_LOCK HandleTableLock;
+	// ... other useless fields
+} HANDLE_TABLE_WIN8, * PHANDLE_TABLE_WIN8;
+
+// Windows 7
+typedef BOOLEAN(*EX_ENUMERATE_HANDLE_ROUTINE)(
+	IN PHANDLE_TABLE_ENTRY HandleTableEntry,
+	IN HANDLE Handle,
+	IN PVOID EnumParameter
+	);
+
+// Windows 8
+typedef BOOLEAN(*EX_ENUMERATE_HANDLE_ROUTINE_WIN8)(
+	IN PVOID PspCidTable,
+	IN PHANDLE_TABLE_ENTRY HandleTableEntry,
+	IN HANDLE Handle,
+	IN PVOID EnumParameter
+	);
+
+NTKERNELAPI
+BOOLEAN
+ExEnumHandleTable(
+	_In_  PVOID HandleTable,
+	_In_  EX_ENUMERATE_HANDLE_ROUTINE EnumHandleProcedure,
+	_In_  PVOID EnumParameter,
+	_Out_opt_ PHANDLE Handle
+);
+
+NTKERNELAPI
+VOID
+FASTCALL
+ExfUnblockPushLock(
+	PEX_PUSH_LOCK PushLock,
+	PVOID CurrentWaitBlock
+);
+
 
 /***********************************************************************************************************/
 
