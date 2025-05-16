@@ -1130,7 +1130,7 @@ ZwAlpcDisconnectPort(
 );
 
 /*********************************************进程相关API******************************************************/
-
+#ifdef _KERNEL_MODE
 typedef enum _SYSTEM_INFORMATION_CLASS {
 	SystemBasicInformation = 0,
 	SystemPerformanceInformation = 2,
@@ -1217,14 +1217,46 @@ NTSTATUS WINAPI ZwQueryInformationProcess(
 
 #define EXHANDLE_TABLE_ENTRY_LOCK_BIT    1
 
-typedef struct _HANDLE_TABLE_ENTRY {
-	union {
-		VOID* Object;
+// 有这个结构，先添加着，后续根据情况处理
+typedef struct _EXHANDLE
+{
+	union
+	{
+		struct
+		{
+			ULONG TagBits : 2;
+			ULONG Index : 30;
+		};
+		VOID* GenericHandleOverlay;
+		ULONG Value;
+	};
+} EXHANDLE, * PEXHANDLE;
+
+
+// 查阅网上资料，多是展示的下一个多一个参数的版本，先使用来看看
+//typedef struct _HANDLE_TABLE_ENTRY {
+//	union {
+//		VOID* Object;
+//		ULONG_PTR Value;
+//	} u1;
+//	union {
+//		ULONG GrantedAccess;
+//		ULONG_PTR NextFreeTableEntry;
+//	} u2;
+//} HANDLE_TABLE_ENTRY, * PHANDLE_TABLE_ENTRY;
+
+typedef struct _HANDLE_TABLE_ENTRY
+{
+	union
+	{
+		PVOID Object;
+		ULONG ObAttributes;
 		ULONG_PTR Value;
 	} u1;
-	union {
-		ULONG GrantedAccess;
-		ULONG_PTR NextFreeTableEntry;
+	union
+	{
+		ACCESS_MASK GrantedAccess;
+		LONG NextFreeTableEntry;
 	} u2;
 } HANDLE_TABLE_ENTRY, * PHANDLE_TABLE_ENTRY;
 
@@ -1272,7 +1304,7 @@ ExfUnblockPushLock(
 	PEX_PUSH_LOCK PushLock,
 	PVOID CurrentWaitBlock
 );
-
+#endif
 
 /***********************************************************************************************************/
 

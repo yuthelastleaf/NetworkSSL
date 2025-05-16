@@ -169,7 +169,7 @@ void main()
     /*hThread = CreateThread(NULL, 0, &CreatePortAndListen, (LPVOID)port_name, 0, NULL);
     WaitForSingleObject(hThread, INFINITE);*/
 
-
+    DWORD pid = GetCurrentProcessId();
     AlpcHandler::getInstance().registerTask(L"event", [](std::shared_ptr<void> ctx) {
         auto alpcContext = std::static_pointer_cast<AlpcHandlerCtx>(ctx);
         AsyncTaskManager::GetInstance().AddTask([](std::shared_ptr<void> ctx) {
@@ -242,8 +242,20 @@ void main()
             printf("%s\n", json.GetJsonString().get());
 
         }
+        else if(szInput[0] == 'h') {
+            CJSONHandler json_hide;
+            json_hide[L"type"] = "hideproc";
+            json_hide[L"pid"] = pid;
+            AlpcConn::getInstance().notify_msg("llprocflt", json_hide);
+        }
+        else if (szInput[0] == 'r') {
+            CJSONHandler json_restore;
+            json_restore[L"type"] = "restoreproc";
+            json_restore[L"pid"] = pid;
+            AlpcConn::getInstance().notify_msg("llprocflt", json_restore);
+        }
         else {
-            AlpcConn::getInstance().notify_msg("yjnalpc", json);
+            AlpcConn::getInstance().notify_msg("llprocflt", json);
         }
     }
 
