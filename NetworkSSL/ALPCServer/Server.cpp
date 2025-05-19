@@ -254,6 +254,15 @@ void main()
             json_restore[L"pid"] = pid;
             AlpcConn::getInstance().notify_msg("llprocflt", json_restore);
         }
+        else if (szInput[0] == 'c') {
+            CJSONHandler json_create;
+            json_create[L"type"] = "createvm";
+            json_create[L"devtype"] = 1;
+            json_create[L"devnum"] = 2;
+            json_create[L"devsize"] = 128;
+            json_create[L"devletter"] = 'F';
+            AlpcConn::getInstance().notify_msg("llvmdisk", json_create);
+        }
         else {
             AlpcConn::getInstance().notify_msg("llprocflt", json);
         }
