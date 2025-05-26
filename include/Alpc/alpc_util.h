@@ -410,7 +410,6 @@ private:
         // RtlSecureZeroMemory(&serverPortAttr, sizeof(serverPortAttr));
 
         PostMsg connect(alpc_name.c_str(), 0, alpc_name.length());
-        SIZE_T conn_size;
         /*ntRet = pfunc_NtAlpcConnectPort(&hsrv, &usPort, NULL, &serverPortAttr,
             ALPC_SYNC_CONNECTION, NULL, (PPORT_MESSAGE)connect.GetMsgMem(), NULL, NULL, NULL, NULL);*/
         ntRet = pfunc_NtAlpcConnectPort(&hsrv, &usPort, NULL, &serverPortAttr,
@@ -486,6 +485,17 @@ public:
             alpc_svr_name_ = str_name;
         }
         return create_server(port_name);
+    }
+
+    bool start_server(const char* port_name) {
+
+        if (alpc_svr_name_.empty()) {
+            alpc_svr_name_ = port_name;
+        }
+        wchar_t* wstr_name = NULL;
+        CStringHandler::Ansi2WChar(port_name, wstr_name);
+        std::unique_ptr<wchar_t> pportname(wstr_name);
+        return create_server(pportname.get());
     }
 
     bool set_alpc_name(const char* aname) {
