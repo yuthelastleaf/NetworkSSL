@@ -14,6 +14,12 @@
 #include "alpc_register.h"
 #include "../../include/SingletonTools/AsyncTaskManager.h"
 
+// 为了不重复还是加上LL吧
+#define LLSTATUS_PORT_DISCONNECTED          ((NTSTATUS)0xC0000037L)
+#define LLSTATUS_INVALID_PORT_HANDLE        ((NTSTATUS)0xC0000042L)
+#define LLSTATUS_PORT_CLOSED                ((NTSTATUS)0xC0000700L)
+
+
 class CommUtil {
 public:
     static std::wstring NtPathToDosPath(const std::wstring& NtPath)
@@ -305,7 +311,6 @@ public:
         NTSTATUS ntRet = 0;
         if (alpc_port_) {
             DEFAPI(NtAlpcDisconnectPort);
-            
             ntRet = pfunc_NtAlpcDisconnectPort(alpc_port_, 0);
             CloseHandle(alpc_port_);
             alpc_port_ = 0;
@@ -357,6 +362,10 @@ public:
                                 std::static_pointer_cast<void>(aptr));
                         }
                         }, aptr);
+                }
+                else if(ntRet == LLSTATUS_PORT_DISCONNECTED ||
+                    ntRet == LLSTATUS_INVALID_PORT_HANDLE || ntRet == LLSTATUS_PORT_CLOSED){
+                    break;
                 }
             }
         }
