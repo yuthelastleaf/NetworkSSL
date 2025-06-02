@@ -48,7 +48,7 @@ public:
     bool SetString(const wchar_t* value) {
         bool flag = false;
         char* pvalue = nullptr;
-        if (m_object.json_obj && CStringHandler::WChar2Ansi(value, pvalue)) {
+        if (m_object.json_obj && CStringHandler::WChar2UTF8(value, pvalue)) {
             // 将当前对象设置为字符串类型，并赋予新值
             m_object.json_obj->type = cJSON_String;
             flag = cJSON_SetValuestring(m_object.json_obj, pvalue);
@@ -96,7 +96,7 @@ public:
             return CJSONHandler();
         }
         char* pkey = nullptr;
-        if (CStringHandler::WChar2Ansi(key, pkey)) {
+        if (CStringHandler::WChar2UTF8(key, pkey)) {
             cJSON* child = cJSON_GetObjectItemCaseSensitive(m_object.json_obj, pkey);
             if (!child) {
                 child = cJSON_CreateObject();
@@ -125,7 +125,7 @@ public:
         if (cJSON_UpdateType(m_object.json_obj, cJSON_String)) {
             if (cJSON_UpdateType(m_object.parent, cJSON_Object)) {
                 char* pvalue = nullptr;
-                if (CStringHandler::WChar2Ansi(value, pvalue)) {
+                if (CStringHandler::WChar2UTF8(value, pvalue)) {
                     cJSON_SetValuestring(m_object.json_obj, pvalue);
                     delete[] pvalue;
                 }

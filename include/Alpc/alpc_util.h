@@ -274,11 +274,11 @@ public:
             RtlSecureZeroMemory(&SecurityQos, sizeof(SecurityQos));
             serverPortAttr.SecurityQos = SecurityQos;
 
-            LPCWSTR szDACL = L"D:(A;OICI;GAGW;;;AU)";// Allow full control to authenticated users
+            LPCSTR szDACL = "D:(A;OICI;GAGW;;;AU)";// Allow full control to authenticated users
 
             PSECURITY_DESCRIPTOR pSD;
             ULONG ulSDSize = 0;
-            BOOL success = ConvertStringSecurityDescriptorToSecurityDescriptor(
+            BOOL success = ConvertStringSecurityDescriptorToSecurityDescriptorA(
                 szDACL,
                 SDDL_REVISION_1,
                 &pSD,
@@ -290,6 +290,7 @@ public:
 
             NTSTATUS nret = pfunc_NtAlpcCreatePort(&alpc_port_, &objPort, &serverPortAttr);
             if (!nret) {
+                AlpcHandler::getInstance().start(2);
                 std::thread runserver(&AlpcConn::run_server, this);
                 runserver.detach();
                 flag = true;
@@ -309,6 +310,7 @@ public:
             ntRet = pfunc_NtAlpcDisconnectPort(alpc_port_, 0);
             CloseHandle(alpc_port_);
             alpc_port_ = 0;
+            AlpcHandler::getInstance().stop();
         }
         return NT_SUCCESS(ntRet);
     }
@@ -395,11 +397,11 @@ private:
         RtlSecureZeroMemory(&SecurityQos, sizeof(SecurityQos));
         serverPortAttr.SecurityQos = SecurityQos;
 
-        LPCWSTR szDACL = L"D:(A;OICI;GAGW;;;AU)";// Allow full control to authenticated users
+        LPCSTR szDACL = "D:(A;OICI;GAGW;;;AU)";// Allow full control to authenticated users
 
         PSECURITY_DESCRIPTOR pSD;
         ULONG ulSDSize = 0;
-        BOOL success = ConvertStringSecurityDescriptorToSecurityDescriptor(
+        BOOL success = ConvertStringSecurityDescriptorToSecurityDescriptorA(
             szDACL,
             SDDL_REVISION_1,
             &pSD,
@@ -478,7 +480,7 @@ public:
 
     // Ê¾Àý·½·¨
     bool start_server(const wchar_t* port_name) {
-
+        
         if (alpc_svr_name_.empty()) {
             char* str_name;
             CStringHandler::WChar2Ansi(port_name, str_name);

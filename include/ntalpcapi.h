@@ -1672,7 +1672,7 @@ static PVOID GetAPIAddress(PCWSTR funcname) {
 
 static PVOID GetAPIAddress(LPCSTR funcname) {
 	PVOID res = NULL;
-	HMODULE hntdll = GetModuleHandle(L"ntdll.dll");
+	HMODULE hntdll = GetModuleHandleA("ntdll.dll");
 	if (hntdll) {
 		res = GetProcAddress(hntdll, funcname);
 	}

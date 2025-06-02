@@ -236,6 +236,119 @@ namespace CStringHandler {
 		unsigned int elem_cnt_;
 	};
 
+    // 修改或添加这个函数
+    bool WChar2UTF8(const wchar_t* wstr, char*& utf8str) {
+        if (!wstr) return false;
+#ifdef _WIN32
+        // 计算需要的缓冲区大小
+        int utf8Len = WideCharToMultiByte(CP_UTF8, 0, wstr, -1, nullptr, 0, nullptr, nullptr);
+        if (utf8Len == 0) return false;
+        // 分配缓冲区
+        utf8str = new char[utf8Len];
+        // 转换为 UTF-8
+        int result = WideCharToMultiByte(CP_UTF8, 0, wstr, -1, utf8str, utf8Len, nullptr, nullptr);
+        return result != 0;
+#else
+        // Linux/macOS 上 wchar_t 通常是 UTF-32，需要转换为 UTF-8
+        std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
+        std::string utf8 = converter.to_bytes(wstr);
+        utf8str = new char[utf8.length() + 1];
+        strcpy(utf8str, utf8.c_str());
+        return true;
+#endif
+    }
+    // 同样，如果需要从 UTF-8 转回宽字符
+    bool UTF82WChar(const char* utf8str, wchar_t*& wstr) {
+        if (!utf8str) return false;
+#ifdef _WIN32
+        int wideLen = MultiByteToWideChar(CP_UTF8, 0, utf8str, -1, nullptr, 0);
+        if (wideLen == 0) return false;
+        wstr = new wchar_t[wideLen];
+        int result = MultiByteToWideChar(CP_UTF8, 0, utf8str, -1, wstr, wideLen);
+        return result != 0;
+#else
+        std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
+        std::wstring wide = converter.from_bytes(utf8str);
+        wstr = new wchar_t[wide.length() + 1];
+        wcscpy(wstr, wide.c_str());
+        return true;
+#endif
+    }
+
+    // ANSI/GBK 转 UTF-8
+    bool ANSI2UTF8(const char* ansiStr, char*& utf8Str) {
+        if (!ansiStr) return false;
+
+#ifdef _WIN32
+        // 先转为宽字符
+        int wideLen = MultiByteToWideChar(CP_ACP, 0, ansiStr, -1, nullptr, 0);
+        if (wideLen == 0) return false;
+
+        wchar_t* wideStr = new wchar_t[wideLen];
+        int result1 = MultiByteToWideChar(CP_ACP, 0, ansiStr, -1, wideStr, wideLen);
+        if (result1 == 0) {
+            delete[] wideStr;
+            return false;
+        }
+
+        // 再转为 UTF-8
+        int utf8Len = WideCharToMultiByte(CP_UTF8, 0, wideStr, -1, nullptr, 0, nullptr, nullptr);
+        if (utf8Len == 0) {
+            delete[] wideStr;
+            return false;
+        }
+
+        utf8Str = new char[utf8Len];
+        int result2 = WideCharToMultiByte(CP_UTF8, 0, wideStr, -1, utf8Str, utf8Len, nullptr, nullptr);
+
+        delete[] wideStr;
+        return result2 != 0;
+#else
+        // Linux/macOS 通常已经是 UTF-8，直接复制
+        size_t len = strlen(ansiStr) + 1;
+        utf8Str = new char[len];
+        strcpy(utf8Str, ansiStr);
+        return true;
+#endif
+    }
+
+    // UTF-8 转 ANSI/GBK
+    bool UTF82ANSI(const char* utf8Str, char*& ansiStr) {
+        if (!utf8Str) return false;
+
+#ifdef _WIN32
+        // 先转为宽字符
+        int wideLen = MultiByteToWideChar(CP_UTF8, 0, utf8Str, -1, nullptr, 0);
+        if (wideLen == 0) return false;
+
+        wchar_t* wideStr = new wchar_t[wideLen];
+        int result1 = MultiByteToWideChar(CP_UTF8, 0, utf8Str, -1, wideStr, wideLen);
+        if (result1 == 0) {
+            delete[] wideStr;
+            return false;
+        }
+
+        // 再转为 ANSI
+        int ansiLen = WideCharToMultiByte(CP_ACP, 0, wideStr, -1, nullptr, 0, nullptr, nullptr);
+        if (ansiLen == 0) {
+            delete[] wideStr;
+            return false;
+        }
+
+        ansiStr = new char[ansiLen];
+        int result2 = WideCharToMultiByte(CP_ACP, 0, wideStr, -1, ansiStr, ansiLen, nullptr, nullptr);
+
+        delete[] wideStr;
+        return result2 != 0;
+#else
+        // Linux/macOS 通常已经是 UTF-8，直接复制
+        size_t len = strlen(utf8Str) + 1;
+        ansiStr = new char[len];
+        strcpy(ansiStr, utf8Str);
+        return true;
+#endif
+    }
+
 }
 
 class DualString {
