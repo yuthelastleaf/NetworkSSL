@@ -43,7 +43,8 @@ public:
     // 提交任务到线程池
     void submit(std::wstring task_name, std::shared_ptr<void> context) {
         std::lock_guard<std::mutex> lock(queueMutex);
-        if (taskMap.find(task_name) != taskMap.end()) {
+        if (taskMap.find(task_name) != taskMap.end() ||
+            taskMap.find(L"*") != taskMap.end()) {
             // 找到任务并推送到任务队列
             tasks.push({ task_name, context });
             cv.notify_one();  // 唤醒一个等待的线程来处理任务
@@ -59,6 +60,7 @@ public:
     // sync handle task 
     void sync_run_task(std::wstring task_name, std::shared_ptr<void> context) {
         std::function<void(std::shared_ptr<void>)> task = nullptr;
+        auto def_it = taskMap.find(L"*");
         if (!task) {
             std::lock_guard<std::mutex> lock(taskMapMutex);
             auto it = taskMap.find(task_name);
@@ -68,6 +70,9 @@ public:
         }
         if (task) {
             task(context);
+        } 
+        else if (def_it != taskMap.end()) {
+            def_it->second(context);
         }
     }
 
@@ -98,8 +103,12 @@ private:
             {
                 std::lock_guard<std::mutex> lock(taskMapMutex);
                 auto it = taskMap.find(task.first);
+                auto def_it = taskMap.find(L"*");
                 if (it != taskMap.end()) {
                     it->second(task.second);  // 执行任务
+                }
+                else if (def_it != taskMap.end()) {
+                    def_it->second(task.second);
                 }
             }
         }

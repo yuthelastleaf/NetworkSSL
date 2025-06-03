@@ -444,7 +444,7 @@ public:
         PostMsg sendmsg(msg.get(), msgid, strlen(msg.get()));
 
         if (!port) {
-            port = alpc_port_;
+            return false;
         }
 
         NTSTATUS ntRet = sendrecv(port, 0, (PPORT_MESSAGE)sendmsg.GetMsgMem(), NULL,
