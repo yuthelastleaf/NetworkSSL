@@ -8,9 +8,9 @@
 #include <stdlib.h>
 #include <ctype.h>
 
- // ==================== 内部结构定义 ====================
+// ==================== 内部结构定义 ====================
 
- // Token结构
+// Token结构
 typedef struct token {
     token_type_t type;
     char* text;           // 原始文本
@@ -1040,7 +1040,7 @@ rule_value_t copy_rule_value(const rule_value_t* src) {
 // ==================== 评估函数实现 ====================
 
 // 从事件上下文获取字段值
-static rule_value_t get_field_value(field_id_t field_id, const event_context_t* context) {
+rule_value_t get_field_value(field_id_t field_id, const event_context_t* context) {
     rule_value_t value = { 0 };
 
     switch (field_id) {
@@ -1238,7 +1238,8 @@ static bool string_endswith(const char* str, const char* suffix) {
 }
 
 // 评估二元运算符
-static rule_value_t evaluate_binary_op(token_type_t op, const rule_value_t* left, const rule_value_t* right) {
+// 同样编译错误，去掉static试试
+rule_value_t evaluate_binary_op(token_type_t op, const rule_value_t* left, const rule_value_t* right) {
     rule_value_t result = { 0 };
 
     // 算术运算符
@@ -1434,7 +1435,8 @@ static rule_value_t evaluate_binary_op(token_type_t op, const rule_value_t* left
 }
 
 // 评估一元运算符
-static rule_value_t evaluate_unary_op(token_type_t op, const rule_value_t* operand) {
+// 原来是静态，但编译错误，试着去掉static
+rule_value_t evaluate_unary_op(token_type_t op, const rule_value_t* operand) {
     rule_value_t result = { 0 };
 
     if (op == TOK_NOT) {

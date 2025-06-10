@@ -3,14 +3,22 @@
  */
 
 #include "rule_vm.h"
+#include "rule_engine.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
 
- // ==================== 字节码编译器实现 ====================
+ // ==================== 前向声明 ====================
 
- // 编译器上下文
+ // 从rule_engine.c中声明的函数
+extern rule_value_t evaluate_binary_op(token_type_t op, const rule_value_t* left, const rule_value_t* right);
+extern rule_value_t evaluate_unary_op(token_type_t op, const rule_value_t* operand);
+extern rule_value_t get_field_value(field_id_t field_id, const event_context_t* context);
+
+// ==================== 字节码编译器实现 ====================
+
+// 编译器上下文
 typedef struct {
     vm_bytecode_t* bytecode;
     bool has_error;
@@ -342,7 +350,7 @@ vm_bytecode_t* compile_rule_to_bytecode(const char* rule_string) {
 
     // 编译为字节码
     vm_bytecode_t* bytecode = compile_to_bytecode(rule->ast);
-    bytecode->source = strdup(rule_string);
+    bytecode->source = _strdup(rule_string);
 
     destroy_compiled_rule(rule);
     return bytecode;
@@ -476,7 +484,7 @@ static void vm_execute_instruction(vm_instance_t* vm, vm_instruction_t* inst) {
         value.type = RULE_TYPE_STRING;
         vm_constant_t* constant = &vm->bytecode->constants[inst->operand.constant.index];
         value.value.string.length = constant->value.string.length;
-        value.value.string.data = strdup(constant->value.string.data);
+        value.value.string.data = _strdup(constant->value.string.data);
         vm_push(vm, value);
     }
     break;
@@ -492,7 +500,7 @@ static void vm_execute_instruction(vm_instance_t* vm, vm_instruction_t* inst) {
 
     case OP_PUSH_FIELD:
     {
-        // rule_value_t value = get_field_value(inst->operand.field_id, vm->context);
+        rule_value_t value = get_field_value(inst->operand.field_id, vm->context);
         vm_push(vm, value);
     }
     break;
@@ -538,7 +546,519 @@ static void vm_execute_instruction(vm_instance_t* vm, vm_instruction_t* inst) {
         case OP_STARTSWITH: tok_type = TOK_STARTSWITH; break;
         case OP_ENDSWITH: tok_type = TOK_ENDSWITH; break;
         case OP_IN: tok_type = TOK_IN; break;
+        default: tok_type = TOK_EOF; break;
+        }
+
+        rule_value_t result = evaluate_binary_op(tok_type, &left, &right);
+
+        free_rule_value(&left);
+        free_rule_value(&right);
+
+        vm_push(vm, result);
+    }
+    break;
+
+    case OP_NOT:
+    case OP_NEG:
+    {
+        rule_value_t operand = vm_pop(vm);
+
+        token_type_t tok_type = (inst->opcode == OP_NOT) ? TOK_NOT : TOK_MINUS;
+        rule_value_t result = evaluate_unary_op(tok_type, &operand);
+
+        free_rule_value(&operand);
+
+        vm_push(vm, result);
+    }
+    break;
+
+    case OP_ARRAY_BEGIN:
+        // 数组开始标记，目前不需要特殊处理
+        break;
+
+    case OP_ARRAY_END:
+    {
+        // 从栈中收集数组元素
+        size_t count = inst->operand.integer;
+        rule_value_t array_value = { 0 };
+        array_value.type = RULE_TYPE_ARRAY;
+        array_value.value.array.count = count;
+
+        if (count > 0) {
+            array_value.value.array.items = (rule_value_t*)malloc(sizeof(rule_value_t) * count);
+
+            // 注意：元素在栈中是逆序的
+            for (size_t i = count; i > 0; i--) {
+                array_value.value.array.items[i - 1] = vm_pop(vm);
+            }
+        }
+
+        vm_push(vm, array_value);
+    }
+    break;
+
+    case OP_HALT:
+        vm->running = false;
+        break;
+
+    default:
+        vm->has_error = true;
+        snprintf(vm->error_message, sizeof(vm->error_message),
+            "Unknown opcode: 0x%02X", inst->opcode);
+        vm->running = false;
+        break;
+    }
+}
+
+// 执行字节码
+bool vm_execute(vm_instance_t* vm, const event_context_t* context) {
+    if (!vm || !vm->bytecode || !vm->bytecode->is_valid || !context) {
+        return false;
+    }
+
+    // 重置VM状态
+    vm->context = context;
+    vm->running = true;
+    vm->has_error = false;
+    vm->error_message[0] = '\0';
+    vm->frame->pc = 0;
+    vm->frame->stack_size = 0;
+    vm->instruction_count = 0;
+
+    // 执行循环
+    while (vm->running && vm->frame->pc < vm->bytecode->instruction_count) {
+        vm_instruction_t* inst = &vm->bytecode->instructions[vm->frame->pc];
+        vm->frame->pc++;
+        vm->instruction_count++;
+
+        vm_execute_instruction(vm, inst);
+
+        if (vm->has_error) {
+            return false;
         }
     }
+
+    // 检查最终结果
+    if (vm->frame->stack_size != 1) {
+        vm->has_error = true;
+        snprintf(vm->error_message, sizeof(vm->error_message),
+            "Invalid stack size at end: %zu", vm->frame->stack_size);
+        return false;
     }
+
+    return true;
+}
+
+// 获取执行结果
+rule_value_t vm_get_result(vm_instance_t* vm) {
+    if (!vm || vm->frame->stack_size == 0) {
+        rule_value_t null_value = { 0 };
+        null_value.type = RULE_TYPE_NULL;
+        return null_value;
+    }
+
+    return copy_rule_value(&vm->frame->stack[0]);
+}
+
+// ==================== 反汇编器实现 ====================
+
+static const char* opcode_to_string(vm_opcode_t opcode) {
+    switch (opcode) {
+    case OP_NOP: return "NOP";
+    case OP_PUSH_NUM: return "PUSH_NUM";
+    case OP_PUSH_STR: return "PUSH_STR";
+    case OP_PUSH_BOOL: return "PUSH_BOOL";
+    case OP_PUSH_NULL: return "PUSH_NULL";
+    case OP_PUSH_FIELD: return "PUSH_FIELD";
+    case OP_POP: return "POP";
+    case OP_DUP: return "DUP";
+    case OP_SWAP: return "SWAP";
+    case OP_ADD: return "ADD";
+    case OP_SUB: return "SUB";
+    case OP_MUL: return "MUL";
+    case OP_DIV: return "DIV";
+    case OP_MOD: return "MOD";
+    case OP_NEG: return "NEG";
+    case OP_EQ: return "EQ";
+    case OP_NE: return "NE";
+    case OP_LT: return "LT";
+    case OP_LE: return "LE";
+    case OP_GT: return "GT";
+    case OP_GE: return "GE";
+    case OP_AND: return "AND";
+    case OP_OR: return "OR";
+    case OP_NOT: return "NOT";
+    case OP_CONTAINS: return "CONTAINS";
+    case OP_STARTSWITH: return "STARTSWITH";
+    case OP_ENDSWITH: return "ENDSWITH";
+    case OP_REGEX: return "REGEX";
+    case OP_ICONTAINS: return "ICONTAINS";
+    case OP_IN: return "IN";
+    case OP_PUSH_ARRAY: return "PUSH_ARRAY";
+    case OP_ARRAY_BEGIN: return "ARRAY_BEGIN";
+    case OP_ARRAY_END: return "ARRAY_END";
+    case OP_JMP: return "JMP";
+    case OP_JMP_TRUE: return "JMP_TRUE";
+    case OP_JMP_FALSE: return "JMP_FALSE";
+    case OP_CALL: return "CALL";
+    case OP_RET: return "RET";
+    case OP_HALT: return "HALT";
+    default: return "UNKNOWN";
+    }
+}
+
+// 反汇编字节码
+void disassemble_bytecode(const vm_bytecode_t* bytecode) {
+    if (!bytecode) {
+        printf("Bytecode is NULL\n");
+        return;
+    }
+
+    printf("=== Bytecode Disassembly ===\n");
+
+    if (bytecode->source) {
+        printf("Source: %s\n", bytecode->source);
+    }
+
+    printf("Valid: %s\n", bytecode->is_valid ? "Yes" : "No");
+
+    if (!bytecode->is_valid) {
+        printf("Error: %s\n", bytecode->error_message);
+        return;
+    }
+
+    // 打印常量池
+    printf("\n--- Constant Pool ---\n");
+    for (size_t i = 0; i < bytecode->constant_count; i++) {
+        printf("[%zu] ", i);
+        switch (bytecode->constants[i].type) {
+        case RULE_TYPE_NUMBER:
+            printf("NUMBER: %.2f\n", bytecode->constants[i].value.number);
+            break;
+        case RULE_TYPE_STRING:
+            printf("STRING: \"%s\"\n", bytecode->constants[i].value.string.data);
+            break;
+        case RULE_TYPE_BOOLEAN:
+            printf("BOOLEAN: %s\n", bytecode->constants[i].value.boolean ? "true" : "false");
+            break;
+        default:
+            printf("UNKNOWN TYPE\n");
+            break;
+        }
+    }
+
+    // 打印指令
+    printf("\n--- Instructions ---\n");
+    for (size_t i = 0; i < bytecode->instruction_count; i++) {
+        vm_instruction_t* inst = &bytecode->instructions[i];
+        printf("%04zu: %-15s", i, opcode_to_string(inst->opcode));
+
+        // 打印操作数
+        switch (inst->opcode) {
+        case OP_PUSH_NUM:
+        case OP_PUSH_STR:
+            printf(" #%u", inst->operand.constant.index);
+            break;
+
+        case OP_PUSH_BOOL:
+            printf(" %s", inst->operand.integer ? "true" : "false");
+            break;
+
+        case OP_PUSH_FIELD:
+            printf(" field_id=%d", inst->operand.field_id);
+            break;
+
+        case OP_ARRAY_BEGIN:
+        case OP_ARRAY_END:
+            printf(" count=%lld", (long long)inst->operand.integer);
+            break;
+
+        case OP_JMP:
+        case OP_JMP_TRUE:
+        case OP_JMP_FALSE:
+            printf(" offset=%u", inst->operand.offset);
+            break;
+
+        default:
+            break;
+        }
+
+        printf("\n");
+    }
+
+    printf("=== End of Disassembly ===\n\n");
+}
+
+// ==================== 缓存规则实现 ====================
+
+// 创建缓存规则
+cached_rule_t* create_cached_rule(const char* rule_string) {
+    cached_rule_t* rule = (cached_rule_t*)malloc(sizeof(cached_rule_t));
+
+    rule->rule_string = _strdup(rule_string);
+    rule->bytecode = compile_rule_to_bytecode(rule_string);
+    rule->ast_rule = NULL; // 延迟创建
+
+    return rule;
+}
+
+// 销毁缓存规则
+void destroy_cached_rule(cached_rule_t* rule) {
+    if (!rule) return;
+
+    if (rule->rule_string) {
+        free(rule->rule_string);
+    }
+
+    if (rule->bytecode) {
+        destroy_bytecode(rule->bytecode);
+    }
+
+    if (rule->ast_rule) {
+        destroy_compiled_rule(rule->ast_rule);
+    }
+
+    free(rule);
+}
+
+// 使用缓存规则评估事件
+bool evaluate_cached_rule(const cached_rule_t* rule, const event_context_t* context) {
+    if (!rule || !context) return false;
+
+    // 优先使用字节码
+    if (rule->bytecode && rule->bytecode->is_valid) {
+        vm_instance_t* vm = create_vm_instance(rule->bytecode);
+        bool result = false;
+
+        if (vm_execute(vm, context)) {
+            rule_value_t vm_result = vm_get_result(vm);
+
+            if (vm_result.type == RULE_TYPE_BOOLEAN) {
+                result = vm_result.value.boolean;
+            }
+            else if (vm_result.type == RULE_TYPE_NUMBER) {
+                result = (vm_result.value.number != 0);
+            }
+
+            free_rule_value(&vm_result);
+        }
+
+        destroy_vm_instance(vm);
+        return result;
+    }
+
+    // 回退到AST评估
+    if (!rule->ast_rule) {
+        ((cached_rule_t*)rule)->ast_rule = compile_rule(rule->rule_string);
+    }
+
+    if (rule->ast_rule && rule->ast_rule->is_valid) {
+        return evaluate_rule(rule->ast_rule, context);
+    }
+
+    return false;
+}
+
+// ==================== 序列化实现 ====================
+
+// 魔数和版本
+#define BYTECODE_MAGIC 0x52554C45 // "RULE"
+#define BYTECODE_VERSION 1
+
+// 序列化字节码到二进制格式
+uint8_t* serialize_bytecode(const vm_bytecode_t* bytecode, size_t* size) {
+    if (!bytecode || !size) return NULL;
+
+    // 计算需要的大小
+    *size = sizeof(uint32_t) * 2; // magic + version
+    *size += sizeof(uint32_t) * 2; // instruction_count + constant_count
+    *size += bytecode->instruction_count * sizeof(vm_instruction_t);
+
+    // 计算常量池大小
+    for (size_t i = 0; i < bytecode->constant_count; i++) {
+        *size += sizeof(uint8_t); // type
+        switch (bytecode->constants[i].type) {
+        case RULE_TYPE_NUMBER:
+            *size += sizeof(double);
+            break;
+        case RULE_TYPE_STRING:
+            *size += sizeof(uint32_t); // length
+            *size += bytecode->constants[i].value.string.length;
+            break;
+        case RULE_TYPE_BOOLEAN:
+            *size += sizeof(uint8_t);
+            break;
+        default:
+            break;
+        }
+    }
+
+    // 分配内存
+    uint8_t* buffer = (uint8_t*)malloc(*size);
+    uint8_t* ptr = buffer;
+
+    // 写入魔数和版本
+    *(uint32_t*)ptr = BYTECODE_MAGIC;
+    ptr += sizeof(uint32_t);
+    *(uint32_t*)ptr = BYTECODE_VERSION;
+    ptr += sizeof(uint32_t);
+
+    // 写入计数
+    *(uint32_t*)ptr = (uint32_t)bytecode->instruction_count;
+    ptr += sizeof(uint32_t);
+    *(uint32_t*)ptr = (uint32_t)bytecode->constant_count;
+    ptr += sizeof(uint32_t);
+
+    // 写入指令
+    memcpy(ptr, bytecode->instructions, bytecode->instruction_count * sizeof(vm_instruction_t));
+    ptr += bytecode->instruction_count * sizeof(vm_instruction_t);
+
+    // 写入常量池
+    for (size_t i = 0; i < bytecode->constant_count; i++) {
+        *ptr++ = (uint8_t)bytecode->constants[i].type;
+
+        switch (bytecode->constants[i].type) {
+        case RULE_TYPE_NUMBER:
+            *(double*)ptr = bytecode->constants[i].value.number;
+            ptr += sizeof(double);
+            break;
+
+        case RULE_TYPE_STRING:
+            *(uint32_t*)ptr = (uint32_t)bytecode->constants[i].value.string.length;
+            ptr += sizeof(uint32_t);
+            memcpy(ptr, bytecode->constants[i].value.string.data,
+                bytecode->constants[i].value.string.length);
+            ptr += bytecode->constants[i].value.string.length;
+            break;
+
+        case RULE_TYPE_BOOLEAN:
+            *ptr++ = bytecode->constants[i].value.boolean ? 1 : 0;
+            break;
+
+        default:
+            break;
+        }
+    }
+
+    return buffer;
+}
+
+// 从二进制格式反序列化字节码
+vm_bytecode_t* deserialize_bytecode(const uint8_t* data, size_t size) {
+    if (!data || size < sizeof(uint32_t) * 4) return NULL;
+
+    const uint8_t* ptr = data;
+
+    // 检查魔数
+    if (*(uint32_t*)ptr != BYTECODE_MAGIC) {
+        return NULL;
+    }
+    ptr += sizeof(uint32_t);
+
+    // 检查版本
+    if (*(uint32_t*)ptr != BYTECODE_VERSION) {
+        return NULL;
+    }
+    ptr += sizeof(uint32_t);
+
+    // 创建字节码结构
+    vm_bytecode_t* bytecode = (vm_bytecode_t*)malloc(sizeof(vm_bytecode_t));
+    memset(bytecode, 0, sizeof(vm_bytecode_t));
+    bytecode->is_valid = true;
+
+    // 读取计数
+    bytecode->instruction_count = *(uint32_t*)ptr;
+    ptr += sizeof(uint32_t);
+    bytecode->constant_count = *(uint32_t*)ptr;
+    ptr += sizeof(uint32_t);
+
+    // 分配并读取指令
+    bytecode->instruction_capacity = bytecode->instruction_count;
+    bytecode->instructions = (vm_instruction_t*)malloc(
+        sizeof(vm_instruction_t) * bytecode->instruction_capacity);
+    memcpy(bytecode->instructions, ptr, bytecode->instruction_count * sizeof(vm_instruction_t));
+    ptr += bytecode->instruction_count * sizeof(vm_instruction_t);
+
+    // 分配并读取常量池
+    bytecode->constant_capacity = bytecode->constant_count;
+    bytecode->constants = (vm_constant_t*)malloc(
+        sizeof(vm_constant_t) * bytecode->constant_capacity);
+
+    for (size_t i = 0; i < bytecode->constant_count; i++) {
+        bytecode->constants[i].type = (rule_data_type_t)*ptr++;
+
+        switch (bytecode->constants[i].type) {
+        case RULE_TYPE_NUMBER:
+            bytecode->constants[i].value.number = *(double*)ptr;
+            ptr += sizeof(double);
+            break;
+
+        case RULE_TYPE_STRING:
+        {
+            uint32_t length = *(uint32_t*)ptr;
+            ptr += sizeof(uint32_t);
+            bytecode->constants[i].value.string.length = length;
+            bytecode->constants[i].value.string.data = (char*)malloc(length + 1);
+            memcpy(bytecode->constants[i].value.string.data, ptr, length);
+            bytecode->constants[i].value.string.data[length] = '\0';
+            ptr += length;
+        }
+        break;
+
+        case RULE_TYPE_BOOLEAN:
+            bytecode->constants[i].value.boolean = (*ptr++ != 0);
+            break;
+
+        default:
+            break;
+        }
+    }
+
+    return bytecode;
+}
+
+// 保存字节码到文件
+bool save_bytecode_to_file(const vm_bytecode_t* bytecode, const char* filename) {
+    size_t size;
+    uint8_t* data = serialize_bytecode(bytecode, &size);
+    if (!data) return false;
+
+    FILE* file = fopen(filename, "wb");
+    if (!file) {
+        free(data);
+        return false;
+    }
+
+    size_t written = fwrite(data, 1, size, file);
+    fclose(file);
+    free(data);
+
+    return written == size;
+}
+
+// 从文件加载字节码
+vm_bytecode_t* load_bytecode_from_file(const char* filename) {
+    FILE* file = fopen(filename, "rb");
+    if (!file) return NULL;
+
+    // 获取文件大小
+    fseek(file, 0, SEEK_END);
+    size_t size = ftell(file);
+    fseek(file, 0, SEEK_SET);
+
+    // 读取文件内容
+    uint8_t* data = (uint8_t*)malloc(size);
+    size_t read = fread(data, 1, size, file);
+    fclose(file);
+
+    if (read != size) {
+        free(data);
+        return NULL;
+    }
+
+    // 反序列化
+    vm_bytecode_t* bytecode = deserialize_bytecode(data, size);
+    free(data);
+
+    return bytecode;
 }
