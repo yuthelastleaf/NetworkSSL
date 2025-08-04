@@ -1437,6 +1437,7 @@
 #include <windows.h>
 #include <shellapi.h>
 #include <string>
+#include <locale>
 
 // 解析命令行参数，设置水印参数
 WatermarkParams ParseCommandLine()

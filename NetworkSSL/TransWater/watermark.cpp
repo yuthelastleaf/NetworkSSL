@@ -20,6 +20,9 @@
 #pragma comment(lib, "ws2_32.lib")
 #pragma comment(lib, "iphlpapi.lib")
 
+#define min(x, y) (x < y) ? x : y
+#define max(x, y) (x > y) ? x : y
+
 // 初始化静态成员
 WatermarkManager* WatermarkManager::s_pInstance = nullptr;
 
@@ -228,10 +231,10 @@ void WatermarkManager::DrawMultiMonitorWatermark()
     // 计算所有显示器的总体边界
     RECT totalBounds = monitors[0].rect;
     for (size_t i = 1; i < monitors.size(); i++) {
-        totalBounds.left = std::min(totalBounds.left, monitors[i].rect.left);
-        totalBounds.top = std::min(totalBounds.top, monitors[i].rect.top);
-        totalBounds.right = std::max(totalBounds.right, monitors[i].rect.right);
-        totalBounds.bottom = std::max(totalBounds.bottom, monitors[i].rect.bottom);
+        totalBounds.left = min(totalBounds.left, monitors[i].rect.left);
+        totalBounds.top = min(totalBounds.top, monitors[i].rect.top);
+        totalBounds.right = max(totalBounds.right, monitors[i].rect.right);
+        totalBounds.bottom = max(totalBounds.bottom, monitors[i].rect.bottom);
     }
 
     // 计算覆盖所有显示器的大小

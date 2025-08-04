@@ -4,7 +4,7 @@
 #include <vector>
 #include <string>
 #include <GdiPlus.h>
-#include <opencv2/opencv.hpp>
+// #include <opencv2/opencv.hpp>
 
 // 辅助结构体，用于存储显示器信息
 struct MonitorInfo {
