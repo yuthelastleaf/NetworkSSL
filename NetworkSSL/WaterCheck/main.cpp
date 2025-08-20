@@ -207,6 +207,315 @@ public:
     }
 };
 
+
+class ShapeBasedDotEnhancer {
+public:
+
+    // 主要的圆点形状增强函数
+    cv::Mat enhanceCircularDots(const cv::Mat& originalImage, int dotSize = 8) {
+        cv::Mat result;
+
+        // 方案1：基于圆形模板匹配增强（推荐）
+        result = enhanceWithCircularTemplate(originalImage, dotSize);
+
+        // 其他备选方案
+        // result = enhanceWithLaplacianOfGaussian(originalImage, dotSize);
+        // result = enhanceWithTopHat(originalImage, dotSize);
+
+        return result;
+    }
+
+private:
+
+    // 方案1：基于圆形模板匹配的增强
+    cv::Mat enhanceWithCircularTemplate(const cv::Mat& image, int dotSize) {
+        cv::Mat gray, enhanced;
+
+        // 转换为灰度图
+        if (image.channels() == 3) {
+            cv::cvtColor(image, gray, cv::COLOR_BGR2GRAY);
+        }
+        else {
+            gray = image.clone();
+        }
+
+        // 创建多个尺寸的圆形模板
+        std::vector<cv::Mat> templates;
+        std::vector<int> sizes = { dotSize - 2, dotSize, dotSize + 2, dotSize + 4 };  // 多尺寸适应
+
+        for (int size : sizes) {
+            cv::Mat circleTemplate = createCircleTemplate(size);
+            templates.push_back(circleTemplate);
+        }
+
+        // 对每个模板进行匹配
+        cv::Mat combinedResponse = cv::Mat::zeros(gray.size(), CV_32F);
+
+        for (const auto& tmpl : templates) {
+            cv::Mat response;
+            cv::matchTemplate(gray, tmpl, response, cv::TM_CCOEFF_NORMED);
+
+            // 扩展response到原图大小
+            cv::Mat paddedResponse;
+            int padX = (gray.cols - response.cols) / 2;
+            int padY = (gray.rows - response.rows) / 2;
+            cv::copyMakeBorder(response, paddedResponse, padY, padY, padX, padX,
+                cv::BORDER_CONSTANT, cv::Scalar(0));
+
+            // 调整尺寸确保匹配
+            if (paddedResponse.size() != gray.size()) {
+                cv::resize(paddedResponse, paddedResponse, gray.size());
+            }
+
+            // 累加响应
+            cv::add(combinedResponse, paddedResponse, combinedResponse);
+        }
+
+        // 归一化响应
+        cv::normalize(combinedResponse, combinedResponse, 0, 255, cv::NORM_MINMAX);
+        combinedResponse.convertTo(enhanced, CV_8U);
+
+        // 应用阈值保留强响应区域
+        cv::Mat mask;
+        cv::threshold(enhanced, mask, 100, 255, cv::THRESH_BINARY);  // 调整阈值
+
+        // 创建增强结果
+        cv::Mat result = gray.clone();
+
+        // 在圆点区域增强对比度
+        cv::Mat enhancedDots;
+        cv::convertScaleAbs(gray, enhancedDots, 1.5, 30);  // 增强对比度和亮度
+        enhancedDots.copyTo(result, mask);
+
+        return result;
+    }
+
+    // 创建圆形模板
+    cv::Mat createCircleTemplate(int radius) {
+        int size = radius * 2 + 1;
+        cv::Mat circleTemplate = cv::Mat::zeros(size, size, CV_8U);
+
+        cv::Point center(radius, radius);
+
+        // 创建实心圆
+        cv::circle(circleTemplate, center, radius - 1, cv::Scalar(255), -1);
+
+        // 添加模糊边缘，模拟真实圆点
+        cv::GaussianBlur(circleTemplate, circleTemplate, cv::Size(3, 3), 1);
+
+        return circleTemplate;
+    }
+
+    // 方案2：基于高斯拉普拉斯的圆点检测增强
+    cv::Mat enhanceWithLaplacianOfGaussian(const cv::Mat& image, int dotSize) {
+        cv::Mat gray, enhanced;
+
+        if (image.channels() == 3) {
+            cv::cvtColor(image, gray, cv::COLOR_BGR2GRAY);
+        }
+        else {
+            gray = image.clone();
+        }
+
+        // 高斯拉普拉斯检测器，特别适合检测圆形斑点
+        std::vector<cv::Mat> responses;
+        std::vector<double> sigmas = { dotSize * 0.3, dotSize * 0.4, dotSize * 0.5, dotSize * 0.6 };
+
+        for (double sigma : sigmas) {
+            cv::Mat gaussian, laplacian;
+
+            // 高斯模糊
+            int kernelSize = (int)(sigma * 6) | 1;  // 确保是奇数
+            cv::GaussianBlur(gray, gaussian, cv::Size(kernelSize, kernelSize), sigma);
+
+            // 拉普拉斯算子
+            cv::Laplacian(gaussian, laplacian, CV_32F);
+
+            // 平方增强响应
+            cv::multiply(laplacian, laplacian, laplacian);
+
+            responses.push_back(laplacian);
+        }
+
+        // 合并多尺度响应
+        cv::Mat combinedResponse = cv::Mat::zeros(gray.size(), CV_32F);
+        for (const auto& response : responses) {
+            cv::add(combinedResponse, response, combinedResponse);
+        }
+
+        // 归一化并创建增强图像
+        cv::normalize(combinedResponse, combinedResponse, 0, 255, cv::NORM_MINMAX);
+        combinedResponse.convertTo(enhanced, CV_8U);
+
+        // 与原图融合
+        cv::Mat result;
+        cv::addWeighted(gray, 0.6, enhanced, 0.4, 0, result);
+
+        return result;
+    }
+
+    // 方案3：基于Top-hat变换的圆点增强
+    cv::Mat enhanceWithTopHat(const cv::Mat& image, int dotSize) {
+        cv::Mat gray, enhanced;
+
+        if (image.channels() == 3) {
+            cv::cvtColor(image, gray, cv::COLOR_BGR2GRAY);
+        }
+        else {
+            gray = image.clone();
+        }
+
+        // 创建圆形结构元素
+        cv::Mat kernel = cv::getStructuringElement(cv::MORPH_ELLIPSE,
+            cv::Size(dotSize, dotSize));
+
+        // White Top-hat：检测比周围亮的小对象
+        cv::Mat whiteTophat;
+        cv::morphologyEx(gray, whiteTophat, cv::MORPH_TOPHAT, kernel);
+
+        // Black Top-hat：检测比周围暗的小对象  
+        cv::Mat blackTophat;
+        cv::morphologyEx(gray, blackTophat, cv::MORPH_BLACKHAT, kernel);
+
+        // 合并两种检测结果
+        cv::Mat combined;
+        cv::add(whiteTophat, blackTophat, combined);
+
+        // 增强检测到的特征
+        cv::Mat result;
+        cv::addWeighted(gray, 1.0, combined, 2.0, 0, result);
+
+        return result;
+    }
+
+public:
+
+    // 基于边缘和圆形度的综合增强
+    cv::Mat comprehensiveCircleEnhancement(const cv::Mat& originalImage, int dotSize = 8) {
+        cv::Mat gray, enhanced;
+
+        if (originalImage.channels() == 3) {
+            cv::cvtColor(originalImage, gray, cv::COLOR_BGR2GRAY);
+        }
+        else {
+            gray = originalImage.clone();
+        }
+
+        // 1. 边缘检测增强圆形轮廓
+        cv::Mat edges = enhanceCircularEdges(gray, dotSize);
+
+        // 2. 圆形模板匹配
+        cv::Mat templateResponse = enhanceWithCircularTemplate(originalImage, dotSize);
+
+        // 3. 形态学增强
+        cv::Mat morphEnhanced = enhanceWithTopHat(originalImage, dotSize);
+
+        // 4. 融合多种方法的结果
+        cv::Mat result;
+        cv::addWeighted(templateResponse, 0.4, edges, 0.3, 0, result);
+        cv::addWeighted(result, 1.0, morphEnhanced, 0.3, 0, result);
+
+        return result;
+    }
+
+private:
+
+    // 增强圆形边缘
+    cv::Mat enhanceCircularEdges(const cv::Mat& gray, int dotSize) {
+        cv::Mat edges, enhanced;
+
+        // 使用Canny边缘检测
+        cv::Canny(gray, edges, 50, 150);
+
+        // 使用圆形结构元素进行膨胀，连接圆形边缘
+        cv::Mat kernel = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(3, 3));
+        cv::dilate(edges, edges, kernel);
+
+        // 查找轮廓并过滤圆形
+        std::vector<std::vector<cv::Point>> contours;
+        cv::findContours(edges, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
+
+        enhanced = cv::Mat::zeros(gray.size(), CV_8U);
+
+        for (const auto& contour : contours) {
+            // 计算轮廓面积和周长
+            double area = cv::contourArea(contour);
+            double perimeter = cv::arcLength(contour, true);
+
+            if (area < 10 || area > 500) continue;  // 面积过滤
+
+            // 圆形度检测：4*π*面积/周长²，圆形接近1
+            double circularity = 4 * CV_PI * area / (perimeter * perimeter);
+
+            if (circularity > 0.6) {  // 调整圆形度阈值
+                // 绘制检测到的圆形轮廓
+                cv::drawContours(enhanced, std::vector<std::vector<cv::Point>>{contour},
+                    -1, cv::Scalar(255), -1);
+            }
+        }
+
+        return enhanced;
+    }
+
+public:
+
+    // 可视化不同增强方法的效果对比
+    void compareShapeEnhancementMethods(const cv::Mat& original, int dotSize = 8,
+        const std::string& outputPath = "shape_enhancement_comparison.png") {
+        cv::Mat method1 = enhanceWithCircularTemplate(original, dotSize);
+        cv::Mat method2 = enhanceWithLaplacianOfGaussian(original, dotSize);
+        cv::Mat method3 = enhanceWithTopHat(original, dotSize);
+        cv::Mat method4 = comprehensiveCircleEnhancement(original, dotSize);
+
+        // 调整尺寸用于显示
+        int displayHeight = 250;
+        double scale = (double)displayHeight / original.rows;
+
+        cv::Mat orig_resized, m1_resized, m2_resized, m3_resized, m4_resized;
+        cv::resize(original, orig_resized, cv::Size(), scale, scale);
+        cv::resize(method1, m1_resized, cv::Size(), scale, scale);
+        cv::resize(method2, m2_resized, cv::Size(), scale, scale);
+        cv::resize(method3, m3_resized, cv::Size(), scale, scale);
+        cv::resize(method4, m4_resized, cv::Size(), scale, scale);
+
+        // 转换为相同通道数
+        if (orig_resized.channels() == 3) {
+            cv::cvtColor(m1_resized, m1_resized, cv::COLOR_GRAY2BGR);
+            cv::cvtColor(m2_resized, m2_resized, cv::COLOR_GRAY2BGR);
+            cv::cvtColor(m3_resized, m3_resized, cv::COLOR_GRAY2BGR);
+            cv::cvtColor(m4_resized, m4_resized, cv::COLOR_GRAY2BGR);
+        }
+
+        // 创建对比图
+        cv::Mat topRow, bottomRow, comparison;
+        cv::hconcat(orig_resized, m1_resized, topRow);
+        cv::hconcat(topRow, m2_resized, topRow);
+        cv::hconcat(m3_resized, m4_resized, bottomRow);
+
+        cv::vconcat(topRow, bottomRow, comparison);
+
+        // 添加标签
+        cv::putText(comparison, "Original", cv::Point(10, 30),
+            cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(0, 255, 0), 2);
+        cv::putText(comparison, "Template Match",
+            cv::Point(orig_resized.cols + 10, 30),
+            cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(0, 255, 0), 2);
+        cv::putText(comparison, "LoG Filter",
+            cv::Point(orig_resized.cols + m1_resized.cols + 10, 30),
+            cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(0, 255, 0), 2);
+        cv::putText(comparison, "Top-hat",
+            cv::Point(10, displayHeight + 60),
+            cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(0, 255, 0), 2);
+        cv::putText(comparison, "Comprehensive",
+            cv::Point(m3_resized.cols + 10, displayHeight + 60),
+            cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(0, 255, 0), 2);
+
+        cv::imwrite(outputPath, comparison);
+        std::cout << "[SUCCESS] 形状增强方法对比图已保存到: " << outputPath << std::endl;
+    }
+};
+
+
 /*
 智能前景分离的点阵识别器 v4.0
 
@@ -222,492 +531,6 @@ public:
 - 拍照时的复杂背景
 - 光照不均匀
 */
-
-
-// 基于棋盘格原理的5×8点阵检测和重建
-class GridBasedDotMatrixDetector {
-public:
-    struct GridResult {
-        cv::Point2f topLeft;           // 左上角起点
-        float colSpacing;              // 列间距
-        float rowSpacing;              // 行间距
-        float rotationAngle;           // 旋转角度
-        std::vector<std::vector<bool>> matrix;  // 5×8矩阵
-        std::vector<cv::Point> matchedDots;     // 匹配的实际点
-        float confidence;              // 匹配置信度
-
-        GridResult() : colSpacing(0), rowSpacing(0), rotationAngle(0), confidence(0) {}
-    };
-
-private:
-    struct RegionCandidate {
-        std::vector<cv::Point> dots;
-        cv::Rect boundingBox;
-        float density;                 // 点密度
-        float regularity;             // 规律性评分
-    };
-
-public:
-    // 主检测函数
-    std::vector<GridResult> detectGridsFromDots(const std::vector<cv::Point>& allDots,
-        const std::string& debugPrefix = "") {
-        std::vector<GridResult> results;
-
-        std::cout << "[INFO] 开始基于棋盘格原理的点阵检测，总点数: " << allDots.size() << std::endl;
-
-        // 第1步：区域划分和筛选
-        auto candidateRegions = partitionDotsIntoRegions(allDots);
-        std::cout << "[INFO] 划分出 " << candidateRegions.size() << " 个候选区域" << std::endl;
-
-        // 第2步：对每个候选区域进行网格检测
-        for (size_t i = 0; i < candidateRegions.size(); i++) {
-            std::cout << "[INFO] 分析区域 " << (i + 1) << "，包含 " << candidateRegions[i].dots.size() << " 个点" << std::endl;
-
-            auto gridResult = detectGridInRegion(candidateRegions[i],
-                debugPrefix + "_region_" + std::to_string(i));
-
-            if (gridResult.confidence > 0.6f) {
-                results.push_back(gridResult);
-                std::cout << "[SUCCESS] 区域 " << (i + 1) << " 检测成功，置信度: "
-                    << static_cast<int>(gridResult.confidence * 100) << "%" << std::endl;
-            }
-        }
-
-        return results;
-    }
-
-private:
-    // 第1步：将所有点划分为候选区域
-    std::vector<RegionCandidate> partitionDotsIntoRegions(const std::vector<cv::Point>& allDots) {
-        std::vector<RegionCandidate> regions;
-
-        if (allDots.size() < 10) return regions;
-
-        // 使用简单的空间聚类算法（基于距离的聚类）
-        std::vector<bool> assigned(allDots.size(), false);
-
-        for (size_t i = 0; i < allDots.size(); i++) {
-            if (assigned[i]) continue;
-
-            RegionCandidate region;
-            region.dots.push_back(allDots[i]);
-            assigned[i] = true;
-
-            // 找到所有相近的点（递归聚类）
-            std::queue<size_t> toProcess;
-            toProcess.push(i);
-
-            while (!toProcess.empty()) {
-                size_t currentIdx = toProcess.front();
-                toProcess.pop();
-
-                for (size_t j = 0; j < allDots.size(); j++) {
-                    if (assigned[j]) continue;
-
-                    float distance = cv::norm(allDots[currentIdx] - allDots[j]);
-
-                    // 动态聚类半径（基于点密度）
-                    float clusterRadius = estimateClusterRadius(allDots);
-
-                    if (distance < clusterRadius) {
-                        region.dots.push_back(allDots[j]);
-                        assigned[j] = true;
-                        toProcess.push(j);
-                    }
-                }
-            }
-
-            // 评估区域质量
-            if (region.dots.size() >= 10 && region.dots.size() <= 50) {
-                region.boundingBox = calculateBoundingBox(region.dots);
-                region.density = calculatePointDensity(region.dots, region.boundingBox);
-                region.regularity = assessRegionRegularity(region.dots);
-
-                // 只保留质量较好的区域
-                if (region.density > 0.1f && region.regularity > 0.3f) {
-                    regions.push_back(region);
-                }
-            }
-        }
-
-        return regions;
-    }
-
-    // 估算聚类半径
-    float estimateClusterRadius(const std::vector<cv::Point>& dots) {
-        if (dots.size() < 2) return 50.0f;
-
-        // 计算所有点对距离的中位数
-        std::vector<float> distances;
-        for (size_t i = 0; i < std::min(dots.size(), size_t(100)); i++) {
-            for (size_t j = i + 1; j < std::min(dots.size(), size_t(100)); j++) {
-                distances.push_back(cv::norm(dots[i] - dots[j]));
-            }
-        }
-
-        if (distances.empty()) return 50.0f;
-
-        std::sort(distances.begin(), distances.end());
-        float medianDistance = distances[distances.size() / 2];
-
-        // 聚类半径设为中位数距离的2倍
-        return std::min(100.0f, std::max(20.0f, medianDistance * 2.0f));
-    }
-
-    // 第2步：在单个区域内检测网格
-    GridResult detectGridInRegion(const RegionCandidate& region, const std::string& debugPrefix) {
-        GridResult result;
-
-        // 步骤1：寻找左上角起点（基于1010模式）
-        cv::Point2f topLeft = findTopLeftCorner(region.dots);
-        if (topLeft.x < 0) return result; // 未找到合适的起点
-
-        result.topLeft = topLeft;
-
-        // 步骤2：寻找右边第一个点，确定列间距和旋转角度
-        auto rightPoint = findRightNeighbor(region.dots, topLeft);
-        if (rightPoint.first.x < 0) return result;
-
-        result.colSpacing = cv::norm(rightPoint.first - topLeft);
-        cv::Point2f colDirection = rightPoint.first - topLeft;
-        result.rotationAngle = std::atan2(colDirection.y, colDirection.x) * 180.0 / CV_PI;
-
-        // 步骤3：寻找下面第一个点，确定行间距
-        auto belowPoint = findBelowNeighbor(region.dots, topLeft, colDirection);
-        if (belowPoint.first.x < 0) return result;
-
-        result.rowSpacing = cv::norm(belowPoint.first - topLeft);
-
-        // 步骤4：构建完整的5×8网格
-        auto gridPoints = buildCompleteGrid(result.topLeft, result.colSpacing, result.rowSpacing,
-            result.rotationAngle);
-
-        // 步骤5：将实际检测点匹配到网格上
-        result.matrix = matchDotsToGrid(region.dots, gridPoints, result);
-
-        // 步骤6：计算匹配置信度
-        result.confidence = calculateGridConfidence(result);
-
-        // 调试可视化
-        if (!debugPrefix.empty()) {
-            visualizeGridDetection(region.dots, result, debugPrefix + "_grid_detection.png");
-        }
-
-        return result;
-    }
-
-    // 寻找左上角起点
-    cv::Point2f findTopLeftCorner(const std::vector<cv::Point>& dots) {
-        if (dots.empty()) return cv::Point2f(-1, -1);
-
-        // 简单策略：选择x+y最小的点作为起点候选
-        std::vector<std::pair<float, cv::Point>> candidates;
-
-        for (const auto& dot : dots) {
-            float score = dot.x + dot.y; // 左上角应该有最小的x+y值
-            candidates.push_back({ score, dot });
-        }
-
-        // 使用自定义比较器进行排序
-        std::sort(candidates.begin(), candidates.end(),
-            [](const std::pair<float, cv::Point>& a, const std::pair<float, cv::Point>& b) {
-                return a.first < b.first; // 只比较分数，不比较cv::Point
-            });
-
-        // 检查前几个候选点，找到最有可能是网格起点的
-        for (size_t i = 0; i < std::min(candidates.size(), size_t(5)); i++) {
-            cv::Point candidate = candidates[i].second;
-
-            // 检查这个点是否可能是5×8网格的起点
-            if (couldBeGridTopLeft(dots, candidate)) {
-                return cv::Point2f(candidate.x, candidate.y);
-            }
-        }
-
-        return cv::Point2f(-1, -1);
-    }
-
-    // 检查某个点是否可能是网格左上角
-    bool couldBeGridTopLeft(const std::vector<cv::Point>& dots, const cv::Point& candidate) {
-        // 检查右边和下面是否有合理的邻居点
-        int rightNeighbors = 0;
-        int belowNeighbors = 0;
-
-        for (const auto& dot : dots) {
-            cv::Point diff = dot - candidate;
-
-            // 右边的邻居（x方向正值，y变化不大）
-            if (diff.x > 5 && diff.x < 100 && std::abs(diff.y) < 20) {
-                rightNeighbors++;
-            }
-
-            // 下面的邻居（y方向正值，x变化不大）
-            if (diff.y > 5 && diff.y < 100 && std::abs(diff.x) < 20) {
-                belowNeighbors++;
-            }
-        }
-
-        // 如果右边和下面都有邻居，可能是起点
-        return (rightNeighbors >= 1 && belowNeighbors >= 1);
-    }
-
-    // 寻找右边第一个邻居点
-    std::pair<cv::Point2f, float> findRightNeighbor(const std::vector<cv::Point>& dots,
-        const cv::Point2f& topLeft) {
-        cv::Point2f bestPoint(-1, -1);
-        float bestDistance = FLT_MAX;
-
-        for (const auto& dot : dots) {
-            cv::Point2f diff = cv::Point2f(dot.x, dot.y) - topLeft;
-
-            // 必须在右边，且y方向变化不大
-            if (diff.x > 5 && diff.x < 100 && std::abs(diff.y) < 20) {
-                float distance = cv::norm(diff);
-                if (distance < bestDistance) {
-                    bestDistance = distance;
-                    bestPoint = cv::Point2f(dot.x, dot.y);
-                }
-            }
-        }
-
-        return { bestPoint, bestDistance };
-    }
-
-    // 寻找下面第一个邻居点
-    std::pair<cv::Point2f, float> findBelowNeighbor(const std::vector<cv::Point>& dots,
-        const cv::Point2f& topLeft,
-        const cv::Point2f& colDirection) {
-        cv::Point2f bestPoint(-1, -1);
-        float bestDistance = FLT_MAX;
-
-        // 计算垂直方向（相对于列方向的垂直方向）
-        cv::Point2f perpDirection(-colDirection.y, colDirection.x);
-        // 手动归一化向量
-        float length = std::sqrt(perpDirection.x * perpDirection.x + perpDirection.y * perpDirection.y);
-        if (length > 0) {
-            perpDirection.x /= length;
-            perpDirection.y /= length;
-        }
-
-        for (const auto& dot : dots) {
-            cv::Point2f diff = cv::Point2f(dot.x, dot.y) - topLeft;
-
-            // 投影到垂直方向上
-            float perpProjection = diff.x * perpDirection.x + diff.y * perpDirection.y;
-            float colLength = std::sqrt(colDirection.x * colDirection.x + colDirection.y * colDirection.y);
-            float colProjection = (colLength > 0) ? (diff.x * colDirection.x + diff.y * colDirection.y) / colLength : 0;
-
-            // 必须在下方，且列方向偏移不大
-            if (perpProjection > 5 && perpProjection < 100 && std::abs(colProjection) < 20) {
-                float distance = std::sqrt(diff.x * diff.x + diff.y * diff.y);
-                if (distance < bestDistance) {
-                    bestDistance = distance;
-                    bestPoint = cv::Point2f(dot.x, dot.y);
-                }
-            }
-        }
-
-        return { bestPoint, bestDistance };
-    }
-
-    // 构建完整的5×8网格点阵
-    std::vector<std::vector<cv::Point2f>> buildCompleteGrid(const cv::Point2f& topLeft,
-        float colSpacing, float rowSpacing,
-        float rotationAngle) {
-        std::vector<std::vector<cv::Point2f>> grid(5, std::vector<cv::Point2f>(8));
-
-        // 计算旋转矩阵
-        float rad = rotationAngle * CV_PI / 180.0f;
-        cv::Point2f colVector(colSpacing * cos(rad), colSpacing * sin(rad));
-        cv::Point2f rowVector(-rowSpacing * sin(rad), rowSpacing * cos(rad));
-
-        for (int row = 0; row < 5; row++) {
-            for (int col = 0; col < 8; col++) {
-                cv::Point2f gridPoint = topLeft + col * colVector + row * rowVector;
-                grid[row][col] = gridPoint;
-            }
-        }
-
-        return grid;
-    }
-
-    // 将实际点匹配到网格
-    std::vector<std::vector<bool>> matchDotsToGrid(const std::vector<cv::Point>& actualDots,
-        const std::vector<std::vector<cv::Point2f>>& gridPoints,
-        GridResult& result) {
-        std::vector<std::vector<bool>> matrix(5, std::vector<bool>(8, false));
-        result.matchedDots.clear();
-
-        float tolerance = std::max(result.colSpacing, result.rowSpacing) * 0.4f;
-
-        for (int row = 0; row < 5; row++) {
-            for (int col = 0; col < 8; col++) {
-                cv::Point2f gridPoint = gridPoints[row][col];
-
-                // 寻找最近的实际点
-                float minDistance = tolerance;
-                cv::Point bestMatch(-1, -1);
-
-                for (const auto& actualDot : actualDots) {
-                    float distance = cv::norm(cv::Point2f(actualDot.x, actualDot.y) - gridPoint);
-                    if (distance < minDistance) {
-                        minDistance = distance;
-                        bestMatch = actualDot;
-                    }
-                }
-
-                if (bestMatch.x >= 0) {
-                    matrix[row][col] = true;
-                    result.matchedDots.push_back(bestMatch);
-                }
-            }
-        }
-
-        return matrix;
-    }
-
-    // 计算网格匹配置信度
-    float calculateGridConfidence(const GridResult& result) {
-        int totalExpectedPoints = 5 * 8;  // 40个点
-        int matchedPoints = 0;
-
-        for (const auto& row : result.matrix) {
-            for (bool hasPoint : row) {
-                if (hasPoint) matchedPoints++;
-            }
-        }
-
-        // 基础置信度：匹配点数比例
-        float baseConfidence = static_cast<float>(matchedPoints) / totalExpectedPoints;
-
-        // 结构置信度：检查是否有合理的头部行模式
-        float structureBonus = 0.0f;
-        if (result.matrix.size() > 0) {
-            int headerDots = 0;
-            for (bool dot : result.matrix[0]) {
-                if (dot) headerDots++;
-            }
-            // 头部行应该有2-6个点（1010xxxx模式）
-            if (headerDots >= 2 && headerDots <= 6) {
-                structureBonus = 0.2f;
-            }
-        }
-
-        return std::min(1.0f, baseConfidence + structureBonus);
-    }
-
-    // 辅助函数：计算边界框
-    cv::Rect calculateBoundingBox(const std::vector<cv::Point>& dots) {
-        if (dots.empty()) return cv::Rect();
-
-        int minX = dots[0].x, maxX = dots[0].x;
-        int minY = dots[0].y, maxY = dots[0].y;
-
-        for (const auto& dot : dots) {
-            minX = std::min(minX, dot.x);
-            maxX = std::max(maxX, dot.x);
-            minY = std::min(minY, dot.y);
-            maxY = std::max(maxY, dot.y);
-        }
-
-        return cv::Rect(minX, minY, maxX - minX, maxY - minY);
-    }
-
-    // 辅助函数：计算点密度
-    float calculatePointDensity(const std::vector<cv::Point>& dots, const cv::Rect& boundingBox) {
-        if (boundingBox.area() == 0) return 0.0f;
-        return static_cast<float>(dots.size()) / boundingBox.area();
-    }
-
-    // 辅助函数：评估区域规律性
-    float assessRegionRegularity(const std::vector<cv::Point>& dots) {
-        if (dots.size() < 4) return 0.0f;
-
-        // 计算点间距离的变异系数（越小越规律）
-        std::vector<float> distances;
-        for (size_t i = 0; i < dots.size(); i++) {
-            for (size_t j = i + 1; j < dots.size(); j++) {
-                float dist = cv::norm(dots[i] - dots[j]);
-                if (dist > 5 && dist < 200) {
-                    distances.push_back(dist);
-                }
-            }
-        }
-
-        if (distances.size() < 3) return 0.0f;
-
-        cv::Scalar mean, stddev;
-        cv::meanStdDev(distances, mean, stddev);
-
-        float cv = static_cast<float>(stddev[0] / mean[0]); // 变异系数
-        return std::max(0.0f, 1.0f - cv); // 变异系数越小，规律性越强
-    }
-
-    // 可视化网格检测结果
-    void visualizeGridDetection(const std::vector<cv::Point>& actualDots,
-        const GridResult& result,
-        const std::string& filename) {
-        // 创建一个足够大的画布
-        cv::Rect boundingBox = calculateBoundingBox(actualDots);
-        cv::Mat vis(boundingBox.height + 100, boundingBox.width + 100, CV_8UC3, cv::Scalar(255, 255, 255));
-
-        cv::Point offset(-boundingBox.x + 50, -boundingBox.y + 50);
-
-        // 绘制实际检测到的点
-        for (const auto& dot : actualDots) {
-            cv::circle(vis, dot + offset, 4, cv::Scalar(128, 128, 128), 2);
-        }
-
-        // 绘制匹配的点
-        for (const auto& dot : result.matchedDots) {
-            cv::circle(vis, dot + offset, 3, cv::Scalar(0, 255, 0), -1);
-        }
-
-        // 绘制网格框架
-        if (result.confidence > 0.3f) {
-            auto gridPoints = buildCompleteGrid(result.topLeft, result.colSpacing,
-                result.rowSpacing, result.rotationAngle);
-
-            // 绘制网格点
-            for (int row = 0; row < 5; row++) {
-                for (int col = 0; col < 8; col++) {
-                    cv::Point gridPos = cv::Point(gridPoints[row][col]) + offset;
-
-                    if (result.matrix[row][col]) {
-                        cv::circle(vis, gridPos, 2, cv::Scalar(0, 0, 255), -1); // 红色：有点
-                    }
-                    else {
-                        cv::circle(vis, gridPos, 1, cv::Scalar(200, 200, 200), 1); // 灰色：无点
-                    }
-                }
-            }
-
-            // 绘制网格线
-            for (int row = 0; row < 5; row++) {
-                for (int col = 0; col < 7; col++) {
-                    cv::Point p1 = cv::Point(gridPoints[row][col]) + offset;
-                    cv::Point p2 = cv::Point(gridPoints[row][col + 1]) + offset;
-                    cv::line(vis, p1, p2, cv::Scalar(255, 0, 0), 1);
-                }
-            }
-
-            for (int row = 0; row < 4; row++) {
-                for (int col = 0; col < 8; col++) {
-                    cv::Point p1 = cv::Point(gridPoints[row][col]) + offset;
-                    cv::Point p2 = cv::Point(gridPoints[row + 1][col]) + offset;
-                    cv::line(vis, p1, p2, cv::Scalar(255, 0, 0), 1);
-                }
-            }
-        }
-
-        // 添加信息文本
-        std::string info = "Confidence: " + std::to_string(static_cast<int>(result.confidence * 100)) + "%";
-        cv::putText(vis, info, cv::Point(10, 30), cv::FONT_HERSHEY_SIMPLEX, 0.7, cv::Scalar(0, 0, 0), 2);
-
-        cv::imwrite(filename, vis);
-    }
-};
-
 
 class IntelligentDotMatrixReader {
 private:
@@ -806,6 +629,15 @@ public:
     }
 
     std::vector<DecodedResult> processImageIntelligently(const cv::Mat& image, const std::string& debugPrefix = "debug") {
+        //// fft预处理
+        //ShapeBasedDotEnhancer enhancer;
+
+        //// 生成多种方法的对比图
+        //enhancer.compareShapeEnhancementMethods(image);
+
+        //// 使用综合增强方法
+        //cv::Mat enhanced = enhancer.comprehensiveCircleEnhancement(image);
+        
         std::vector<DecodedResult> results;
 
         std::cout << "[INFO] === 第1步：智能前景背景分离 ===" << std::endl;
@@ -820,34 +652,6 @@ public:
             std::cout << "[ERROR] 未检测到任何候选的点阵区域" << std::endl;
             return results;
         }
-
-        std::cout << "[INFO] === 第2步：候选区域分析 ===" << std::endl;
-        std::cout << "[INFO] 检测到 " << candidateRegions.size() << " 个候选区域" << std::endl;
-
-        // 3. 对每个候选区域进行精细分析
-        for (size_t i = 0; i < candidateRegions.size(); i++) {
-            std::cout << "\n[INFO] 分析区域 " << (i + 1) << "/" << candidateRegions.size()
-                << " [" << candidateRegions[i].x << "," << candidateRegions[i].y
-                << " " << candidateRegions[i].width << "x" << candidateRegions[i].height << "]" << std::endl;
-
-            auto regionResults = analyzeRegionInDetail(cleanImage, candidateRegions[i],
-                debugPrefix + "_region_" + std::to_string(i));
-
-            if (!regionResults.empty()) {
-                results.insert(results.end(), regionResults.begin(), regionResults.end());
-            }
-        }
-
-        // 4. 结果后处理和验证
-        results = postProcessResults(results);
-
-        // 5. 调试可视化
-        if (params.saveDebugImages) {
-            saveIntelligentDebugVisualization(image, candidateRegions, results, debugPrefix);
-        }
-
-        // 6. 详细结果报告
-        printIntelligentResultsReport(results);
 
         return results;
     }
@@ -1366,26 +1170,35 @@ private:
     cv::Mat normalizeBackground(const cv::Mat& input, const std::string& debugSuffix) {
         std::cout << "[INFO] 背景均匀化处理..." << std::endl;
 
-        // 1. 估算背景（使用形态学顶帽操作）
-        cv::Mat kernel = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(50, 50));
+        // 1. 使用更温和的背景估计
         cv::Mat background;
-        cv::morphologyEx(input, background, cv::MORPH_CLOSE, kernel);
+        cv::medianBlur(input, background, 21); // 中值滤波保护边缘
+        cv::GaussianBlur(background, background, cv::Size(31, 31), 0);
 
-        // 2. 背景减除
-        cv::Mat foreground;
-        cv::subtract(background, input, foreground);
+        // 2. 计算背景差异并进行校正
+        cv::Mat difference;
+        cv::subtract(input, background, difference);
 
-        // 3. 归一化
-        cv::Mat normalized;
-        cv::normalize(foreground, normalized, 0, 255, cv::NORM_MINMAX);
+        // 3. 自适应增强而不是强制归一化
+        cv::Mat enhanced;
+        difference.convertTo(enhanced, CV_32F);
+        enhanced += 128; // 中性灰度作为基准
+
+        // 4. 限制范围避免过度处理
+        cv::Mat result;
+        enhanced.convertTo(result, CV_8U);
+
+        // 5. 与原图融合，保留更多原始信息
+        cv::Mat final_result;
+        cv::addWeighted(input, 0.3, result, 0.7, 0, final_result);
 
         if (params.saveDebugImages) {
             cv::imwrite(debugSuffix + "_background.png", background);
-            cv::imwrite(debugSuffix + "_foreground.png", foreground);
-            cv::imwrite(debugSuffix + ".png", normalized);
+            cv::imwrite(debugSuffix + "_difference.png", difference + 128);
+            cv::imwrite(debugSuffix + ".png", final_result);
         }
 
-        return normalized;
+        return final_result;
     }
 
     std::vector<cv::Rect> detectDotMatrixRegions(const cv::Mat& image, const std::string& debugPrefix) {
@@ -1395,6 +1208,26 @@ private:
 
         // 1. 多种阈值二值化
         std::vector<cv::Mat> binaryImages = createSmartBinaryImages(image);
+
+        // 对所有二值图进行腐蚀去噪
+        cv::Mat kernel = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(3, 3));
+        for (auto& binary : binaryImages) {
+            cv::Mat eroded;
+            cv::erode(binary, eroded, kernel, cv::Point(-1, -1), 1); // 腐蚀1次
+            binary = eroded; // 替换原图
+        }
+
+
+        std::vector<std::string> windowNames = {
+            "Gaussian Adaptive",
+            "Mean Adaptive",
+            "OTSU + Cleaned",
+            "Edge Enhanced"
+        };
+        // 显示每个二值化图像
+        for (size_t i = 0; i < binaryImages.size(); i++) {
+            cv::imwrite(windowNames[i] + "_binary.png", binaryImages[i]);
+        }
 
         std::vector<cv::Point> detectedDots = detectDotsFromMultipleBinaries(binaryImages, "dottest");
         // 在原图上可视化检测结果
@@ -1417,41 +1250,6 @@ private:
         std::vector<ParsedInfo> results = parser.parseClusters(clusters);
         // 打印结果汇总
         parser.printResults(results);
-
-        GridBasedDotMatrixDetector detector;
-        auto gridResults = detector.detectGridsFromDots(detectedDots, "grid_debug");
-
-        std::cout << "\n[RESULTS] 检测到 " << gridResults.size() << " 个有效网格:" << std::endl;
-
-        for (size_t i = 0; i < gridResults.size(); i++) {
-            const auto& grid = gridResults[i];
-            std::cout << "网格 " << (i + 1) << ":" << std::endl;
-            std::cout << "  起点: (" << grid.topLeft.x << ", " << grid.topLeft.y << ")" << std::endl;
-            std::cout << "  间距: " << grid.colSpacing << " x " << grid.rowSpacing << std::endl;
-            std::cout << "  旋转: " << grid.rotationAngle << "°" << std::endl;
-            std::cout << "  置信度: " << static_cast<int>(grid.confidence * 100) << "%" << std::endl;
-
-            // 这里可以继续调用解码函数
-            // auto decodedResult = decodeMatrix(grid.matrix);
-        }
-
-        // 2. 在每个二值图中寻找矩形区域
-        for (size_t i = 0; i < binaryImages.size(); i++) {
-            auto candidateRects = findRectangularRegions(binaryImages[i]);
-            regions.insert(regions.end(), candidateRects.begin(), candidateRects.end());
-
-            if (params.saveDebugImages) {
-                cv::imwrite(debugPrefix + "_binary_" + std::to_string(i) + ".png", binaryImages[i]);
-            }
-        }
-
-        // 3. 过滤和合并重叠区域
-        regions = filterAndMergeRegions(regions, image.size());
-
-        // 4. 基于内容验证区域
-        regions = validateRegionsByContent(image, regions, debugPrefix);
-
-        std::cout << "[SUCCESS] 筛选出 " << regions.size() << " 个有效候选区域" << std::endl;
 
         return regions;
     }
@@ -1484,733 +1282,6 @@ private:
         binaries.push_back(dilated);
 
         return binaries;
-    }
-
-    std::vector<cv::Rect> findRectangularRegions(const cv::Mat& binary) {
-        std::vector<cv::Rect> rectangles;
-        std::vector<std::vector<cv::Point>> contours;
-
-        cv::findContours(binary, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
-
-        int imageArea = binary.rows * binary.cols;
-        int minArea = static_cast<int>(imageArea * params.minRegionArea);
-        int maxArea = static_cast<int>(imageArea * params.maxRegionArea);
-
-        for (const auto& contour : contours) {
-            double area = cv::contourArea(contour);
-            if (area < minArea || area > maxArea) continue;
-
-            // 获取边界矩形
-            cv::Rect boundingRect = cv::boundingRect(contour);
-
-            // 检查长宽比
-            float aspectRatio = static_cast<float>(boundingRect.width) / boundingRect.height;
-            float expectedRatio = params.expectedAspectRatio;
-
-            if (std::abs(aspectRatio - expectedRatio) / expectedRatio <= params.aspectRatioTolerance ||
-                std::abs(1.0f / aspectRatio - expectedRatio) / expectedRatio <= params.aspectRatioTolerance) {
-
-                rectangles.push_back(boundingRect);
-            }
-        }
-
-        return rectangles;
-    }
-
-    std::vector<cv::Rect> filterAndMergeRegions(const std::vector<cv::Rect>& regions, const cv::Size& imageSize) {
-        std::vector<cv::Rect> filtered;
-
-        // 1. 去重：合并重叠度高的区域
-        std::vector<bool> merged(regions.size(), false);
-
-        for (size_t i = 0; i < regions.size(); i++) {
-            if (merged[i]) continue;
-
-            cv::Rect currentRegion = regions[i];
-
-            // 查找与当前区域重叠的其他区域
-            for (size_t j = i + 1; j < regions.size(); j++) {
-                if (merged[j]) continue;
-
-                cv::Rect intersection = currentRegion & regions[j];
-                float overlap1 = static_cast<float>(intersection.area()) / currentRegion.area();
-                float overlap2 = static_cast<float>(intersection.area()) / regions[j].area();
-
-                if (overlap1 > 0.3f || overlap2 > 0.3f) {
-                    // 合并区域
-                    currentRegion = currentRegion | regions[j];
-                    merged[j] = true;
-                }
-            }
-
-            filtered.push_back(currentRegion);
-            merged[i] = true;
-        }
-
-        // 2. 边界检查
-        std::vector<cv::Rect> finalRegions;
-        for (const auto& region : filtered) {
-            cv::Rect clampedRegion = region & cv::Rect(0, 0, imageSize.width, imageSize.height);
-            if (clampedRegion.area() > 0) {
-                finalRegions.push_back(clampedRegion);
-            }
-        }
-
-        return finalRegions;
-    }
-
-    std::vector<cv::Rect> validateRegionsByContent(const cv::Mat& image, const std::vector<cv::Rect>& regions,
-        const std::string& debugPrefix) {
-        std::cout << "[INFO] 基于内容验证区域..." << std::endl;
-
-        std::vector<cv::Rect> validRegions;
-
-        for (size_t i = 0; i < regions.size(); i++) {
-            const cv::Rect& region = regions[i];
-            cv::Mat roi = image(region);
-
-            // 1. 点数量检查
-            int dotCount = countDotsInRegion(roi);
-
-            // 2. 背景噪声评估
-            float noiseLevel = assessBackgroundNoise(roi, region);
-
-            // 3. 结构规整性检查
-            float structuralScore = assessStructuralRegularity(roi);
-
-            std::cout << "[INFO] 区域" << i << ": 点数=" << dotCount
-                << ", 噪声=" << noiseLevel
-                << ", 结构=" << structuralScore << std::endl;
-
-            // 综合评判
-            bool isValid = (dotCount >= params.minDotsInRegion && dotCount <= params.maxDotsInRegion) &&
-                (noiseLevel < params.backgroundNoiseThreshold) &&
-                (structuralScore > 0.3f);
-
-            if (isValid) {
-                validRegions.push_back(region);
-
-                if (params.saveDebugImages) {
-                    cv::imwrite(debugPrefix + "_valid_region_" + std::to_string(i) + ".png", roi);
-                }
-            }
-        }
-
-        std::cout << "[SUCCESS] 验证通过 " << validRegions.size() << " 个区域" << std::endl;
-        return validRegions;
-    }
-
-    int countDotsInRegion(const cv::Mat& regionImage) {
-        cv::Mat binary;
-        cv::adaptiveThreshold(regionImage, binary, 255, cv::ADAPTIVE_THRESH_GAUSSIAN_C, cv::THRESH_BINARY, 11, 5);
-
-        std::vector<std::vector<cv::Point>> contours;
-        cv::findContours(binary, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
-
-        int dotCount = 0;
-        int regionArea = regionImage.rows * regionImage.cols;
-
-        for (const auto& contour : contours) {
-            double area = cv::contourArea(contour);
-
-            // 动态点大小范围
-            double minDotArea = regionArea * 0.001;  // 0.1%
-            double maxDotArea = regionArea * 0.05;   // 5%
-
-            if (area >= minDotArea && area <= maxDotArea) {
-                // 检查圆度
-                double perimeter = cv::arcLength(contour, true);
-                double circularity = (perimeter > 0) ? 4 * CV_PI * area / (perimeter * perimeter) : 0;
-
-                if (circularity > 0.2) {
-                    dotCount++;
-                }
-            }
-        }
-
-        return dotCount;
-    }
-
-    float assessBackgroundNoise(const cv::Mat& regionImage, const cv::Rect& globalRegion) {
-        // 计算区域内的梯度变化来评估噪声水平
-        cv::Mat grad_x, grad_y;
-        cv::Sobel(regionImage, grad_x, CV_32F, 1, 0, 3);
-        cv::Sobel(regionImage, grad_y, CV_32F, 0, 1, 3);
-
-        cv::Mat grad_magnitude;
-        cv::magnitude(grad_x, grad_y, grad_magnitude);
-
-        cv::Scalar meanGrad = cv::mean(grad_magnitude);
-        return static_cast<float>(meanGrad[0]);
-    }
-
-    float assessStructuralRegularity(const cv::Mat& regionImage) {
-        // 检查是否有规律的点阵结构
-        cv::Mat binary;
-        cv::adaptiveThreshold(regionImage, binary, 255, cv::ADAPTIVE_THRESH_GAUSSIAN_C, cv::THRESH_BINARY, 11, 5);
-
-        // 查找点的质心
-        std::vector<cv::Point2f> points;
-        std::vector<std::vector<cv::Point>> contours;
-        cv::findContours(binary, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
-
-        for (const auto& contour : contours) {
-            cv::Moments m = cv::moments(contour);
-            if (m.m00 > 0) {
-                points.push_back(cv::Point2f(m.m10 / m.m00, m.m01 / m.m00));
-            }
-        }
-
-        if (points.size() < 10) return 0.0f;
-
-        // 计算点间距离的标准差（越小说明越规律）
-        std::vector<float> distances;
-        for (size_t i = 0; i < points.size(); i++) {
-            for (size_t j = i + 1; j < points.size(); j++) {
-                float dist = cv::norm(points[i] - points[j]);
-                if (dist > 5 && dist < 50) { // 合理的点间距范围
-                    distances.push_back(dist);
-                }
-            }
-        }
-
-        if (distances.empty()) return 0.0f;
-
-        cv::Scalar mean, stddev;
-        cv::meanStdDev(distances, mean, stddev);
-
-        // 标准差越小，规律性越强
-        float regularity = 1.0f - std::min(1.0f, static_cast<float>(stddev[0] / mean[0]));
-        return regularity;
-    }
-
-    std::vector<DecodedResult> analyzeRegionInDetail(const cv::Mat& image, const cv::Rect& region,
-        const std::string& debugPrefix) {
-        std::vector<DecodedResult> results;
-
-        cv::Mat roi = image(region);
-
-        std::cout << "[INFO] 详细分析区域: " << region.width << "x" << region.height << std::endl;
-
-        // 1. 精确点检测
-        std::vector<cv::Point> dots = detectPreciseDots(roi, debugPrefix);
-
-        if (dots.size() < params.minDotsInRegion) {
-            std::cout << "[WARNING] 区域内点数不足: " << dots.size() << std::endl;
-            return results;
-        }
-
-        std::cout << "[INFO] 检测到 " << dots.size() << " 个精确点位" << std::endl;
-
-        // 2. 尝试构建点阵网格
-        auto matrixResult = buildDotMatrix(dots, roi.size(), debugPrefix);
-
-        if (matrixResult.syncFound) {
-            // 设置区域信息
-            matrixResult.boundingRect = region;
-            matrixResult.dotPoints = dots;
-
-            // 转换点坐标到全局坐标系
-            for (auto& point : matrixResult.dotPoints) {
-                point.x += region.x;
-                point.y += region.y;
-            }
-
-            // 计算综合评分
-            matrixResult.confidence = calculateIntelligentConfidence(matrixResult, roi);
-
-            if (matrixResult.confidence > 0.5f) {
-                results.push_back(matrixResult);
-            }
-        }
-
-        return results;
-    }
-
-    std::vector<cv::Point> detectPreciseDots(const cv::Mat& roi, const std::string& debugPrefix) {
-        std::vector<cv::Point> preciseDots;
-
-        // 1. 创建优化的二值图
-        cv::Mat binary;
-        cv::adaptiveThreshold(roi, binary, 255, cv::ADAPTIVE_THRESH_GAUSSIAN_C, cv::THRESH_BINARY, 11, 8);
-
-        // 2. 形态学优化
-        cv::Mat kernel = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(2, 2));
-        cv::Mat cleaned;
-        cv::morphologyEx(binary, cleaned, cv::MORPH_CLOSE, kernel);
-
-        // 3. 检测轮廓
-        std::vector<std::vector<cv::Point>> contours;
-        cv::findContours(cleaned, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
-
-        // 4. 严格的点筛选
-        int roiArea = roi.rows * roi.cols;
-        double minArea = roiArea * 0.0005;  // 更严格的最小面积
-        double maxArea = roiArea * 0.02;    // 更严格的最大面积
-
-        for (const auto& contour : contours) {
-            double area = cv::contourArea(contour);
-            if (area < minArea || area > maxArea) continue;
-
-            // 严格的圆度检查
-            double perimeter = cv::arcLength(contour, true);
-            double circularity = (perimeter > 0) ? 4 * CV_PI * area / (perimeter * perimeter) : 0;
-
-            if (circularity > 0.4) { // 更高的圆度要求
-                cv::Moments moments = cv::moments(contour);
-                if (moments.m00 > 0) {
-                    cv::Point center(static_cast<int>(moments.m10 / moments.m00),
-                        static_cast<int>(moments.m01 / moments.m00));
-                    preciseDots.push_back(center);
-                }
-            }
-        }
-
-        if (params.saveDebugImages) {
-            cv::Mat dotVis = roi.clone();
-            if (dotVis.channels() == 1) {
-                cv::cvtColor(dotVis, dotVis, cv::COLOR_GRAY2BGR);
-            }
-            for (const auto& dot : preciseDots) {
-                cv::circle(dotVis, dot, 2, cv::Scalar(0, 255, 0), 2);
-            }
-            cv::imwrite(debugPrefix + "_precise_dots.png", dotVis);
-        }
-
-        return preciseDots;
-    }
-
-    DecodedResult buildDotMatrix(const std::vector<cv::Point>& dots, const cv::Size& roiSize,
-        const std::string& debugPrefix) {
-        DecodedResult result;
-
-        if (dots.size() < 15) return result; // 至少需要3/4的点
-
-        // 1. 估算网格参数
-        auto gridParams = estimateGridParameters(dots, roiSize);
-        if (gridParams.first <= 0 || gridParams.second <= 0) return result;
-
-        float colSpacing = gridParams.first;
-        float rowSpacing = gridParams.second;
-
-        std::cout << "[INFO] 估算网格间距: 列=" << colSpacing << ", 行=" << rowSpacing << std::endl;
-
-        // 2. 寻找最佳网格起点
-        cv::Point2f bestOrigin = findBestGridOrigin(dots, colSpacing, rowSpacing);
-
-        // 3. 构建网格矩阵
-        std::vector<std::vector<bool>> matrix(TOTAL_ROWS, std::vector<bool>(BITS_PER_ROW, false));
-
-        float tolerance = std::max(colSpacing, rowSpacing) * 0.3f;
-
-        for (int row = 0; row < TOTAL_ROWS; row++) {
-            for (int col = 0; col < BITS_PER_ROW; col++) {
-                cv::Point2f expectedPos(bestOrigin.x + col * colSpacing,
-                    bestOrigin.y + row * rowSpacing);
-
-                // 寻找最近的点
-                float minDistance = tolerance;
-                for (const auto& dot : dots) {
-                    float distance = cv::norm(cv::Point2f(dot) - expectedPos);
-                    if (distance < minDistance) {
-                        matrix[row][col] = true;
-                        minDistance = distance;
-                    }
-                }
-            }
-        }
-
-        // 4. 解码矩阵
-        result = decodeMatrixWithValidation(matrix);
-        result.avgDotSize = colSpacing; // 使用间距作为平均点大小的近似
-
-        if (params.saveDebugImages) {
-            saveGridDebugVisualization(dots, bestOrigin, colSpacing, rowSpacing, matrix,
-                roiSize, debugPrefix);
-        }
-
-        return result;
-    }
-
-    std::pair<float, float> estimateGridParameters(const std::vector<cv::Point>& dots, const cv::Size& roiSize) {
-        if (dots.size() < 4) return { 0, 0 };
-
-        // 1. 计算所有点对之间的距离
-        std::vector<float> distances;
-        for (size_t i = 0; i < dots.size(); i++) {
-            for (size_t j = i + 1; j < dots.size(); j++) {
-                float dist = cv::norm(dots[i] - dots[j]);
-                if (dist > 5 && dist < roiSize.width / 2) { // 合理范围内的距离
-                    distances.push_back(dist);
-                }
-            }
-        }
-
-        if (distances.empty()) return { 0, 0 };
-
-        // 2. 距离聚类找到主要间距
-        std::sort(distances.begin(), distances.end());
-
-        // 寻找距离的峰值（最常见的距离）
-        std::map<int, int> distanceHistogram;
-        for (float dist : distances) {
-            int binned = static_cast<int>(dist / 2) * 2; // 2像素精度的分箱
-            distanceHistogram[binned]++;
-        }
-
-        // 找到最频繁的距离
-        int maxCount = 0;
-        float mostCommonDistance = 0;
-        for (const auto& pair : distanceHistogram) {
-            if (pair.second > maxCount) {
-                maxCount = pair.second;
-                mostCommonDistance = pair.first;
-            }
-        }
-
-        // 3. 基于最常见距离估算行列间距
-        // 假设点阵是规则的，行列间距应该相近
-        float estimatedSpacing = mostCommonDistance;
-
-        // 4. 根据期望的5x8网格调整
-        float expectedColSpacing = roiSize.width / 8.0f;
-        float expectedRowSpacing = roiSize.height / 5.0f;
-
-        // 选择更接近实际检测的间距
-        float finalColSpacing = (std::abs(estimatedSpacing - expectedColSpacing) < expectedColSpacing * 0.5f)
-            ? expectedColSpacing : estimatedSpacing;
-        float finalRowSpacing = (std::abs(estimatedSpacing - expectedRowSpacing) < expectedRowSpacing * 0.5f)
-            ? expectedRowSpacing : estimatedSpacing;
-
-        return { finalColSpacing, finalRowSpacing };
-    }
-
-    cv::Point2f findBestGridOrigin(const std::vector<cv::Point>& dots, float colSpacing, float rowSpacing) {
-        cv::Point2f bestOrigin(0, 0);
-        int bestScore = 0;
-
-        // 尝试每个点作为潜在的网格起点
-        for (const auto& dot : dots) {
-            // 尝试该点为网格中不同位置的情况
-            for (int testRow = 0; testRow < TOTAL_ROWS; testRow++) {
-                for (int testCol = 0; testCol < BITS_PER_ROW; testCol++) {
-                    cv::Point2f testOrigin(dot.x - testCol * colSpacing,
-                        dot.y - testRow * rowSpacing);
-
-                    int score = calculateGridScore(dots, testOrigin, colSpacing, rowSpacing);
-                    if (score > bestScore) {
-                        bestScore = score;
-                        bestOrigin = testOrigin;
-                    }
-                }
-            }
-        }
-
-        return bestOrigin;
-    }
-
-    int calculateGridScore(const std::vector<cv::Point>& dots, const cv::Point2f& origin,
-        float colSpacing, float rowSpacing) {
-        int score = 0;
-        float tolerance = std::max(colSpacing, rowSpacing) * 0.3f;
-
-        for (int row = 0; row < TOTAL_ROWS; row++) {
-            for (int col = 0; col < BITS_PER_ROW; col++) {
-                cv::Point2f expectedPos(origin.x + col * colSpacing,
-                    origin.y + row * rowSpacing);
-
-                for (const auto& dot : dots) {
-                    if (cv::norm(cv::Point2f(dot) - expectedPos) < tolerance) {
-                        score++;
-                        break;
-                    }
-                }
-            }
-        }
-
-        return score;
-    }
-
-    DecodedResult decodeMatrixWithValidation(const std::vector<std::vector<bool>>& matrix) {
-        DecodedResult result;
-
-        if (matrix.size() != TOTAL_ROWS || matrix[0].size() != BITS_PER_ROW) {
-            return result;
-        }
-
-        // 1. 同步位验证
-        uint8_t headerByte = extractByteFromRow(matrix[HEADER_ROW]);
-        uint8_t syncBits = headerByte & SYNC_MASK;
-        uint8_t receivedChecksum = headerByte & CHECKSUM_MASK;
-
-        if (syncBits == SYNC_PATTERN) {
-            result.syncFound = true;
-        }
-        else {
-            return result;
-        }
-
-        // 2. 提取IP数据
-        std::vector<uint8_t> ipBytes;
-        for (int i = 0; i < 4; i++) {
-            uint8_t dataByte = extractByteFromRow(matrix[DATA_START_ROW + i]);
-            ipBytes.push_back(dataByte);
-            result.rawBytes.push_back(dataByte);
-        }
-
-        // 3. 校验和验证
-        uint32_t sum = 0;
-        for (uint8_t byte : ipBytes) {
-            sum += byte;
-        }
-        uint8_t calculatedChecksum = sum & 0x0F;
-
-        result.receivedChecksum = receivedChecksum;
-        result.calculatedChecksum = calculatedChecksum;
-        result.checksumValid = (receivedChecksum == calculatedChecksum);
-
-        // 4. 附加验证
-        result.regionValid = validateMatrixRegion(matrix);
-        result.patternValid = validateMatrixPattern(matrix);
-        result.contextValid = validateMatrixContext(ipBytes);
-
-        // 5. 构建IP字符串
-        if (result.checksumValid && result.contextValid) {
-            std::ostringstream oss;
-            oss << static_cast<int>(ipBytes[0]) << "." << static_cast<int>(ipBytes[1]) << "."
-                << static_cast<int>(ipBytes[2]) << "." << static_cast<int>(ipBytes[3]);
-            result.ipAddress = oss.str();
-            result.isValid = true;
-        }
-
-        return result;
-    }
-
-    bool validateMatrixRegion(const std::vector<std::vector<bool>>& matrix) {
-        int totalDots = 0;
-        int headerDots = 0;
-
-        for (int row = 0; row < TOTAL_ROWS; row++) {
-            for (int col = 0; col < BITS_PER_ROW; col++) {
-                if (matrix[row][col]) {
-                    totalDots++;
-                    if (row == HEADER_ROW) headerDots++;
-                }
-            }
-        }
-
-        return (headerDots >= 2 && headerDots <= 6) && (totalDots >= 15 && totalDots <= 35);
-    }
-
-    bool validateMatrixPattern(const std::vector<std::vector<bool>>& matrix) {
-        // 检查是否有完全空白或完全填满的行（数据行）
-        for (int row = DATA_START_ROW; row < TOTAL_ROWS; row++) {
-            int count = 0;
-            for (int col = 0; col < BITS_PER_ROW; col++) {
-                if (matrix[row][col]) count++;
-            }
-            // 数据行不应该全0或全1
-            if (count == 0 || count == BITS_PER_ROW) return false;
-        }
-
-        return true;
-    }
-
-    bool validateMatrixContext(const std::vector<uint8_t>& ipBytes) {
-        if (ipBytes.size() != 4) return false;
-
-        // IP语义验证
-        bool allZero = true, allMax = true;
-        for (uint8_t byte : ipBytes) {
-            if (byte != 0) allZero = false;
-            if (byte != 255) allMax = false;
-        }
-
-        if (allZero || allMax) return false;
-        if (ipBytes[0] == 0 || ipBytes[0] == 255) return false;
-        if (ipBytes[0] >= 224 && ipBytes[0] <= 239) return false; // 多播
-        if (ipBytes[0] == 127) return false; // 回环
-
-        return true;
-    }
-
-    uint8_t extractByteFromRow(const std::vector<bool>& row) {
-        uint8_t value = 0;
-        for (int i = 0; i < BITS_PER_ROW && i < static_cast<int>(row.size()); i++) {
-            if (row[i]) {
-                value |= (1 << (7 - i));
-            }
-        }
-        return value;
-    }
-
-    float calculateIntelligentConfidence(const DecodedResult& result, const cv::Mat& roi) {
-        float confidence = 0.0f;
-
-        // 基础验证权重
-        if (result.syncFound) confidence += 0.25f;
-        if (result.checksumValid) confidence += 0.25f;
-        if (result.regionValid) confidence += 0.2f;
-        if (result.patternValid) confidence += 0.15f;
-        if (result.contextValid) confidence += 0.15f;
-
-        return std::min(1.0f, confidence);
-    }
-
-    void saveGridDebugVisualization(const std::vector<cv::Point>& dots, const cv::Point2f& origin,
-        float colSpacing, float rowSpacing,
-        const std::vector<std::vector<bool>>& matrix,
-        const cv::Size& roiSize, const std::string& debugPrefix) {
-        cv::Mat vis(roiSize, CV_8UC3, cv::Scalar(255, 255, 255));
-
-        // 绘制检测到的点
-        for (const auto& dot : dots) {
-            cv::circle(vis, dot, 3, cv::Scalar(0, 255, 0), 2);
-        }
-
-        // 绘制网格
-        for (int row = 0; row < TOTAL_ROWS; row++) {
-            for (int col = 0; col < BITS_PER_ROW; col++) {
-                cv::Point gridPos(static_cast<int>(origin.x + col * colSpacing),
-                    static_cast<int>(origin.y + row * rowSpacing));
-
-                if (matrix[row][col]) {
-                    cv::circle(vis, gridPos, 2, cv::Scalar(0, 0, 255), 2); // 红色：匹配的格点
-                }
-                else {
-                    cv::circle(vis, gridPos, 1, cv::Scalar(128, 128, 128), 1); // 灰色：空格点
-                }
-            }
-        }
-
-        // 绘制网格框架
-        cv::Point topLeft(static_cast<int>(origin.x), static_cast<int>(origin.y));
-        cv::Point bottomRight(static_cast<int>(origin.x + (BITS_PER_ROW - 1) * colSpacing),
-            static_cast<int>(origin.y + (TOTAL_ROWS - 1) * rowSpacing));
-        cv::rectangle(vis, topLeft, bottomRight, cv::Scalar(255, 0, 0), 1);
-
-        cv::imwrite(debugPrefix + "_grid_analysis.png", vis);
-    }
-
-    std::vector<DecodedResult> postProcessResults(const std::vector<DecodedResult>& results) {
-        if (results.empty()) return results;
-
-        std::cout << "[INFO] === 第3步：结果后处理 ===" << std::endl;
-
-        // 1. 去重
-        std::map<std::string, DecodedResult> uniqueResults;
-        for (const auto& result : results) {
-            if (result.isValid) {
-                auto existing = uniqueResults.find(result.ipAddress);
-                if (existing == uniqueResults.end() || result.confidence > existing->second.confidence) {
-                    uniqueResults[result.ipAddress] = result;
-                }
-            }
-        }
-
-        // 2. 转换为vector并排序
-        std::vector<DecodedResult> finalResults;
-        for (const auto& pair : uniqueResults) {
-            finalResults.push_back(pair.second);
-        }
-
-        std::sort(finalResults.begin(), finalResults.end(),
-            [](const DecodedResult& a, const DecodedResult& b) {
-                return a.confidence > b.confidence;
-            });
-
-        std::cout << "[SUCCESS] 后处理完成，有效结果: " << finalResults.size() << std::endl;
-        return finalResults;
-    }
-
-    void saveIntelligentDebugVisualization(const cv::Mat& originalImage,
-        const std::vector<cv::Rect>& regions,
-        const std::vector<DecodedResult>& results,
-        const std::string& debugPrefix) {
-        cv::Mat vis;
-        if (originalImage.channels() == 1) {
-            cv::cvtColor(originalImage, vis, cv::COLOR_GRAY2BGR);
-        }
-        else {
-            vis = originalImage.clone();
-        }
-
-        // 绘制所有候选区域
-        for (size_t i = 0; i < regions.size(); i++) {
-            cv::rectangle(vis, regions[i], cv::Scalar(128, 128, 128), 1);
-            cv::putText(vis, "R" + std::to_string(i),
-                cv::Point(regions[i].x, regions[i].y - 5),
-                cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(128, 128, 128), 1);
-        }
-
-        // 绘制识别结果
-        for (size_t i = 0; i < results.size(); i++) {
-            const auto& result = results[i];
-
-            cv::Scalar color = result.isValid ? cv::Scalar(0, 255, 0) : cv::Scalar(0, 0, 255);
-
-            // 绘制边界框
-            cv::rectangle(vis, result.boundingRect, color, 2);
-
-            // 绘制检测到的点
-            for (const auto& point : result.dotPoints) {
-                cv::circle(vis, point, 2, color, 1);
-            }
-
-            // 添加标签
-            std::string label = result.isValid ? result.ipAddress : "INVALID";
-            label += " (" + std::to_string(static_cast<int>(result.confidence * 100)) + "%)";
-
-            cv::putText(vis, label,
-                cv::Point(result.boundingRect.x, result.boundingRect.y - 10),
-                cv::FONT_HERSHEY_SIMPLEX, 0.6, color, 2);
-        }
-
-        cv::imwrite(debugPrefix + "_intelligent_final_result.png", vis);
-    }
-
-    void printIntelligentResultsReport(const std::vector<DecodedResult>& results) {
-        std::cout << "\n=== 智能识别结果报告 ===" << std::endl;
-
-        if (results.empty()) {
-            std::cout << "[FAILED] 未检测到任何有效的点阵数据" << std::endl;
-            std::cout << "\n[诊断建议]:" << std::endl;
-            std::cout << "1. 检查图像质量：确保点阵清晰，对比度足够" << std::endl;
-            std::cout << "2. 检查拍摄条件：避免强光、阴影、倾斜角度过大" << std::endl;
-            std::cout << "3. 检查背景干扰：减少复杂背景、莫尔条纹影响" << std::endl;
-            std::cout << "4. 使用调试模式：-debug 查看详细处理过程" << std::endl;
-            return;
-        }
-
-        std::cout << "[SUCCESS] 识别到 " << results.size() << " 个有效IP地址" << std::endl;
-
-        for (size_t i = 0; i < results.size(); i++) {
-            const auto& result = results[i];
-
-            std::cout << "\n--- 结果 " << (i + 1) << " ---" << std::endl;
-            std::cout << "IP地址: " << result.ipAddress << std::endl;
-            std::cout << "置信度: " << static_cast<int>(result.confidence * 100) << "%" << std::endl;
-            std::cout << "检测区域: [" << result.boundingRect.x << "," << result.boundingRect.y
-                << " " << result.boundingRect.width << "x" << result.boundingRect.height << "]" << std::endl;
-            std::cout << "检测点数: " << result.dotPoints.size() << std::endl;
-
-            std::cout << "验证状态:" << std::endl;
-            std::cout << "  ✓ 同步检测: " << (result.syncFound ? "通过" : "失败") << std::endl;
-            std::cout << "  ✓ 校验和: " << (result.checksumValid ? "通过" : "失败");
-            if (result.syncFound) {
-                std::cout << " (期望:" << static_cast<int>(result.calculatedChecksum)
-                    << ", 实际:" << static_cast<int>(result.receivedChecksum) << ")";
-            }
-            std::cout << std::endl;
-            std::cout << "  ✓ 区域验证: " << (result.regionValid ? "通过" : "失败") << std::endl;
-            std::cout << "  ✓ 模式验证: " << (result.patternValid ? "通过" : "失败") << std::endl;
-            std::cout << "  ✓ 上下文验证: " << (result.contextValid ? "通过" : "失败") << std::endl;
-        }
-
-        if (!results.empty()) {
-            std::cout << "\n[推荐] 最佳结果: " << results[0].ipAddress
-                << " (置信度: " << static_cast<int>(results[0].confidence * 100) << "%)" << std::endl;
-        }
     }
 };
 
