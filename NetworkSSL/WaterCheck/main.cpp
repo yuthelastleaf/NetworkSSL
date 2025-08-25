@@ -91,26 +91,44 @@ private:
         ParsedInfo info;
         info.isValid = false;
 
+        // 检查矩阵尺寸
         if (matrix.size() != MATRIX_ROWS || matrix[0].size() != MATRIX_COLS) {
+            std::cout << "矩阵尺寸不匹配" << std::endl;
             return info;
         }
 
-        // 解析第一行（特征码+校验码）
+        // 解析第一行（同步位+校验码）
         std::string firstRow = "";
         for (int col = 0; col < MATRIX_COLS; col++) {
             firstRow += std::to_string(matrix[0][col]);
         }
 
-        // 提取特征码（前4位）
-        info.featureCode = firstRow.substr(0, 4);
+        // 转换为字节值
+        int headerByte = binaryToDecimal(firstRow);
 
-        // 检查特征码是否匹配
+        // 提取同步位（高4位）
+        uint8_t syncBits = (headerByte >> 4) & 0x0F;
+        std::string syncPattern = "";
+        for (int i = 3; i >= 0; i--) {
+            syncPattern += std::to_string((syncBits >> i) & 1);
+        }
+        info.featureCode = syncPattern;
+
+        // 检查同步位是否匹配（假设TARGET_FEATURE是"1010"）
         if (info.featureCode != TARGET_FEATURE) {
+            std::cout << "同步位不匹配，期望: " << TARGET_FEATURE
+                << "，实际: " << info.featureCode << std::endl;
             return info;  // 不是目标点阵
         }
 
-        // 提取校验码（后4位）
-        info.checkCode = firstRow.substr(4, 4);
+        // 提取校验码（低4位）
+        uint8_t receivedChecksum = headerByte & 0x0F;
+        info.checkCode = std::to_string(receivedChecksum);
+
+        std::cout << "\n=== 解析矩阵 ===" << std::endl;
+        std::cout << "头部字节: 0x" << std::hex << headerByte << std::dec << std::endl;
+        std::cout << "同步位: " << info.featureCode << std::endl;
+        std::cout << "接收到的校验码: " << (int)receivedChecksum << std::endl;
 
         // 解析后四行为IPv4地址
         info.ipBytes.clear();
@@ -121,17 +139,49 @@ private:
             }
             int byteValue = binaryToDecimal(rowBinary);
             info.ipBytes.push_back(byteValue);
+            std::cout << "数据行" << row << ": " << byteValue
+                << " 二进制: " << rowBinary << std::endl;
         }
+
+        // 校验IP字节数量
+        if (info.ipBytes.size() != 4) {
+            std::cout << "IP字节数量不正确: " << info.ipBytes.size() << std::endl;
+            return info;
+        }
+
+        // 计算校验和进行验证
+        uint32_t calculatedSum = 0;
+        for (uint8_t byte : info.ipBytes) {
+            calculatedSum += byte;
+        }
+        uint8_t calculatedChecksum = calculatedSum & 0x0F; // 只取低4位
+
+        std::cout << "IP字节: ";
+        for (int i = 0; i < 4; i++) {
+            std::cout << info.ipBytes[i] << " ";
+        }
+        std::cout << std::endl;
+        std::cout << "计算的校验和: " << (int)calculatedChecksum
+            << " (0x" << std::hex << (int)calculatedChecksum << std::dec << ")" << std::endl;
+
+        // 验证校验和
+        if (receivedChecksum != calculatedChecksum) {
+            std::cout << "校验和不匹配！接收: " << (int)receivedChecksum
+                << "，计算: " << (int)calculatedChecksum << std::endl;
+            return info;  // 校验失败
+        }
+
+        std::cout << "校验和验证通过！" << std::endl;
 
         // 构造IP地址字符串
-        if (info.ipBytes.size() == 4) {
-            info.ipAddress = std::to_string(info.ipBytes[0]) + "." +
-                std::to_string(info.ipBytes[1]) + "." +
-                std::to_string(info.ipBytes[2]) + "." +
-                std::to_string(info.ipBytes[3]);
-            info.isValid = true;
-        }
+        info.ipAddress = std::to_string(info.ipBytes[0]) + "." +
+            std::to_string(info.ipBytes[1]) + "." +
+            std::to_string(info.ipBytes[2]) + "." +
+            std::to_string(info.ipBytes[3]);
 
+        std::cout << "解析出的IP地址: " << info.ipAddress << std::endl;
+
+        info.isValid = true;
         return info;
     }
 
