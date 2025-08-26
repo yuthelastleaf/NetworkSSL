@@ -1,5 +1,28 @@
 #include "dbscan.h"
 
+// 根据检测到的点分布动态计算eps
+std::vector<double> DBSCAN::calculateNearestDistances(const std::vector<Point>& points) {
+    std::vector<double> distances;
+    for (const auto& point : points) {
+        double minDist = std::numeric_limits<double>::max();
+        for (const auto& other : points) {
+            if (point._point == other._point) continue;
+            double dist = cv::norm(point._point - other._point);
+            if (dist < minDist) minDist = dist;
+        }
+        distances.push_back(minDist);
+    }
+    std::sort(distances.begin(), distances.end());
+    return distances;
+}
+
+// 使用k-distance图选择最优eps
+double DBSCAN::findOptimalEps(const std::vector<Point>& points, int k) {
+    auto distances = calculateNearestDistances(points);
+    // 返回第k个最近邻距离的90分位数作为eps
+    return distances[static_cast<size_t>(distances.size() * 0.9)];
+}
+
 int DBSCAN::run()
 {
     int clusterID = 1;
@@ -122,5 +145,38 @@ double DBSCAN::calculateAdaptiveEpsilonSquared(const std::vector<Point>& points)
 
     return epsilon * epsilon;  // 返回平方值
 }
+
+double DBSCAN::calculateReasonableEps(const std::vector<Point>& points) {
+    if (points.size() < 10) return 30.0; // 默认值
+
+    std::vector<double> distances;
+
+    // 计算每个点到其他所有点的距离
+    for (size_t i = 0; i < points.size(); i++) {
+        std::vector<double> pointDistances;
+        for (size_t j = 0; j < points.size(); j++) {
+            if (i != j) {
+                double dist = cv::norm(points[i]._point - points[j]._point);
+                if (dist > 5 && dist < 200) { // 过滤异常值
+                    pointDistances.push_back(dist);
+                }
+            }
+        }
+
+        // 对每个点的距离排序，取第3-5近邻的距离
+        if (pointDistances.size() >= 5) {
+            std::sort(pointDistances.begin(), pointDistances.end());
+            distances.push_back(pointDistances[3]); // 第4近邻距离
+        }
+    }
+
+    if (distances.empty()) return 35.0;
+
+    // 返回中位数作为eps
+    std::sort(distances.begin(), distances.end());
+    return distances[distances.size() / 2] * 1.3; // 稍微放宽一些
+}
+
+
 
 

@@ -26,6 +26,8 @@ public:
     DBSCAN(unsigned int minPts, std::vector<Point> points){
         m_minPoints = minPts;
         m_epsilon = calculateAdaptiveEpsilonSquared(points);
+        // m_epsilon = findOptimalEps(points);
+        // m_epsilon = calculateReasonableEps(points);
         m_points = points;
         m_pointSize = points.size();
     }
@@ -36,6 +38,11 @@ public:
     int expandCluster(Point point, int clusterID);
     double calculateAdaptiveEpsilonSquared(const std::vector<Point>& points);
     inline double calculateDistance(const Point& pointCore, const Point& pointTarget);
+
+    std::vector<double> calculateNearestDistances(const std::vector<Point>& points);
+    double findOptimalEps(const std::vector<Point>& points, int k = 4);
+
+    double calculateReasonableEps(const std::vector<Point>& points);
 
     std::map<int, std::vector<Point>> groupClusters();
 
