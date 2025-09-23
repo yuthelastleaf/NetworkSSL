@@ -3,6 +3,13 @@
 #include <GLFW/glfw3.h>
 #include <math.h>
 
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+
+#include <iostream>
+
+#include "shader.h"
+
 class GLDraw
 {
 public:
@@ -13,6 +20,7 @@ public:
         , VAO(0)
         , VBO(0)
         , EBO(0)
+        , outshader(nullptr)
     {
 
     }
@@ -25,6 +33,9 @@ public:
         }
         if (shaderProgram) {
             glDeleteProgram(shaderProgram);
+        }
+        if (outshader) {
+            delete outshader;
         }
     }
 
@@ -707,14 +718,122 @@ public:
         glDrawArrays(GL_TRIANGLES, 0, 3);
     }
 
+    void InitTexture() {
+        const char* vertexShaderSource = "#version 330 core\n"
+            "layout (location = 0) in vec3 aPos;\n"
+            "layout (location = 1) in vec3 aColor;\n"
+            "layout (location = 2) in vec2 aTexCoord;\n"
+            "out vec3 ourColor;\n"
+            "out vec2 TexCoord;\n"
+            "void main()\n"
+            "{\n"
+            "   gl_Position = vec4(aPos, 1.0);\n"
+            "   ourColor = aColor;\n"
+            "   TexCoord = vec2(aTexCoord.x, aTexCoord.y);\n"
+            "}\0";
+
+        const char* fragmentShaderSource = "#version 330 core\n"
+            "out vec4 FragColor;\n"
+            "in vec3 ourColor;\n"
+            "in vec2 TexCoord;\n"
+            "uniform sampler2D texture1;\n"
+            "uniform sampler2D texture2;\n"
+            "void main()\n"
+            "{\n"
+            "   FragColor = mix(texture(texture1, TexCoord), texture(texture2, TexCoord), 0.2) * vec4(ourColor, 1.0);\n"
+            "}\0";
+
+        outshader = new Shader(vertexShaderSource, fragmentShaderSource, false);
+
+
+        glGenTextures(1, &texture);
+        glBindTexture(GL_TEXTURE_2D, texture);
+
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+        int width, height, nrChannels;
+        // 需要先下载container.jpg哦，地址是 https://learnopengl-cn.github.io/img/01/06/container.jpg 
+        // 另外一个笑脸下载地址：https://learnopengl-cn.github.io/img/01/06/awesomeface.png
+        unsigned char* data = stbi_load("container.jpg", &width, &height, &nrChannels, 0);
+
+        if (data)
+        {
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
+            glGenerateMipmap(GL_TEXTURE_2D);
+        }
+        else
+        {
+            std::cout << "Failed to load texture" << std::endl;
+        }
+        stbi_image_free(data);
+
+        float vertices[] = {
+            //     ---- 位置 ----       ---- 颜色 ----     - 纹理坐标 -
+                 0.5f,  0.5f, 0.0f,   1.0f, 0.0f, 0.0f,   1.0f, 1.0f,   // 右上
+                 0.5f, -0.5f, 0.0f,   0.0f, 1.0f, 0.0f,   1.0f, 0.0f,   // 右下
+                -0.5f, -0.5f, 0.0f,   0.0f, 0.0f, 1.0f,   0.0f, 0.0f,   // 左下
+                -0.5f,  0.5f, 0.0f,   1.0f, 1.0f, 0.0f,   0.0f, 1.0f    // 左上
+        };
+
+        unsigned int indices[] = {
+        0, 1, 3, // first triangle
+        1, 2, 3  // second triangle
+        };
+        glGenVertexArrays(1, &VAO);
+        glGenBuffers(1, &VBO);
+        glGenBuffers(1, &EBO);
+
+        glBindVertexArray(VAO);
+
+        glBindBuffer(GL_ARRAY_BUFFER, VBO);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
+
+        // position attribute
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
+        glEnableVertexAttribArray(0);
+        // color attribute
+        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(3 * sizeof(float)));
+        glEnableVertexAttribArray(1);
+        // texture coord attribute
+        glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(6 * sizeof(float)));
+        glEnableVertexAttribArray(2);
+    }
+
+    void DrawTexture() {
+        // render
+        // ------
+        glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
+
+        if (outshader) {
+            outshader->use();
+        }
+        // bind Texture
+        glBindTexture(GL_TEXTURE_2D, texture);
+
+        // render container
+        // ourShader.use();
+        glBindVertexArray(VAO);
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+    }
+
 private:
 	unsigned int vertexShader;
 	unsigned int fragmentShader;
 	unsigned int shaderProgram;
+    unsigned int texture;
 
 	unsigned int VAO;
 	unsigned int VAO2;
-	unsigned int VBO;
+    unsigned int VBO;
 	unsigned int VBO2;
 	unsigned int EBO;
+
+    Shader* outshader;
 };

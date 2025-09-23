@@ -26,5 +26,11 @@
     <ClInclude Include="GLDraw.h">
       <Filter>GLDraw</Filter>
     </ClInclude>
+    <ClInclude Include="stb_image.h">
+      <Filter>GLDraw</Filter>
+    </ClInclude>
+    <ClInclude Include="shader.h">
+      <Filter>GLDraw</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

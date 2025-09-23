@@ -44,7 +44,8 @@ int main()
     // draw.InitMultiProp();
     // draw.InitMultiPropMove();
     // draw.InitMultiPropLRMove();
-    draw.InitVecToClr();
+    // draw.InitVecToClr();
+    draw.InitTexture();
 
     while (!glfwWindowShouldClose(window))
     {
@@ -54,7 +55,8 @@ int main()
         // draw.DrawUniform();
         // draw.DrawMultiMove();
         // draw.DrawMultiLRMove();
-        draw.DrawVecToClr();
+        // draw.DrawVecToClr();
+        draw.DrawTexture();
 
         glfwSwapBuffers(window);
         glfwPollEvents();
