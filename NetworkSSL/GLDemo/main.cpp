@@ -37,13 +37,24 @@ int main()
     
     GLDraw draw;
     // draw.InitTrangle();
-    draw.InitRectangle();
+    // draw.InitRectangle();
+    // draw.InitNearTrangle();
+    // draw.InitTwoTrangle();
+    // draw.InitUniformDemo();
+    // draw.InitMultiProp();
+    // draw.InitMultiPropMove();
+    // draw.InitMultiPropLRMove();
+    draw.InitVecToClr();
 
     while (!glfwWindowShouldClose(window))
     {
         processInput(window);
 
-        draw.Draw();
+        // draw.DrawTwo();
+        // draw.DrawUniform();
+        // draw.DrawMultiMove();
+        // draw.DrawMultiLRMove();
+        draw.DrawVecToClr();
 
         glfwSwapBuffers(window);
         glfwPollEvents();

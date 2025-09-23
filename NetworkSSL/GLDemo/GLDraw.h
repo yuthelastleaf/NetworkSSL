@@ -1,6 +1,7 @@
 #pragma once
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
+#include <math.h>
 
 class GLDraw
 {
@@ -16,7 +17,15 @@ public:
 
     }
     ~GLDraw() {
-
+        if (VAO) {
+            glDeleteVertexArrays(1, &VAO);
+        }
+        if (VBO) {
+            glDeleteBuffers(1, &VBO);
+        }
+        if (shaderProgram) {
+            glDeleteProgram(shaderProgram);
+        }
     }
 
 	void InitTrangle() {
@@ -71,8 +80,6 @@ public:
         glBindVertexArray(0);
 
 	}
-
-    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
     void InitRectangle() {
         const char* vertexShaderSource = "#version 330 core\n"
@@ -141,6 +148,148 @@ public:
         glBindVertexArray(0);
     }
 
+    void InitNearTrangle() {
+        const char* vertexShaderSource = "#version 330 core\n"
+            "layout (location = 0) in vec3 aPos;\n"
+            "void main()\n"
+            "{\n"
+            "   gl_Position = vec4(aPos.x, aPos.y, aPos.z, 1.0);\n"
+            "}\0";
+        vertexShader = glCreateShader(GL_VERTEX_SHADER);
+
+        glShaderSource(vertexShader, 1, &vertexShaderSource, NULL);
+        glCompileShader(vertexShader);
+
+        const char* fragmentShaderSource = "#version 330 core\n"
+            "out vec4 FragColor;\n"
+            "void main()\n"
+            "{\n"
+            "   FragColor = vec4(1.0f, 0.5f, 0.2f, 1.0f);\n"
+            "}\0";
+        fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+        glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL);
+        glCompileShader(fragmentShader);
+
+        shaderProgram = glCreateProgram();
+        glAttachShader(shaderProgram, vertexShader);
+        glAttachShader(shaderProgram, fragmentShader);
+        glLinkProgram(shaderProgram);
+
+        float vertices[] = {
+        -1.0f, -0.5f, 0.0f, // left  
+         0.0f, -0.5f, 0.0f, // right 
+        -0.5f,  0.5f, 0.0f,  // top
+         1.0f, -0.5f, 0.0f,
+         0.5f,  0.5f, 0.0f
+        };
+
+        unsigned int indices[] = {
+            // 注意索引从0开始! 
+            // 此例的索引(0,1,2,3)就是顶点数组vertices的下标，
+            // 这样可以由下标代表顶点组合成矩形
+
+            0, 1, 2, // 第一个三角形
+            1, 3, 4  // 第二个三角形
+        };
+
+        glGenVertexArrays(1, &VAO);
+        glGenBuffers(1, &VBO);
+        glGenBuffers(1, &EBO);
+
+        glBindVertexArray(VAO);
+
+        glBindBuffer(GL_ARRAY_BUFFER, VBO);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
+
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+        glEnableVertexAttribArray(0);
+
+        // note that this is allowed, the call to glVertexAttribPointer registered VBO as the vertex attribute's bound vertex buffer object so afterwards we can safely unbind
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        // glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+
+        // You can unbind the VAO afterwards so other VAO calls won't accidentally modify this VAO, but this rarely happens. Modifying other
+        // VAOs requires a call to glBindVertexArray anyways so we generally don't unbind VAOs (nor VBOs) when it's not directly necessary.
+        // glBindVertexArray(0);
+
+    }
+
+    void InitTwoTrangle() {
+        const char* vertexShaderSource = "#version 330 core\n"
+            "layout (location = 0) in vec3 aPos;\n"
+            "void main()\n"
+            "{\n"
+            "   gl_Position = vec4(aPos.x, aPos.y, aPos.z, 1.0);\n"
+            "}\0";
+        vertexShader = glCreateShader(GL_VERTEX_SHADER);
+
+        glShaderSource(vertexShader, 1, &vertexShaderSource, NULL);
+        glCompileShader(vertexShader);
+
+        const char* fragmentShaderSource = "#version 330 core\n"
+            "out vec4 FragColor;\n"
+            "void main()\n"
+            "{\n"
+            "   FragColor = vec4(1.0f, 0.5f, 0.2f, 1.0f);\n"
+            "}\0";
+        fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+        glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL);
+        glCompileShader(fragmentShader);
+
+        shaderProgram = glCreateProgram();
+        glAttachShader(shaderProgram, vertexShader);
+        glAttachShader(shaderProgram, fragmentShader);
+        glLinkProgram(shaderProgram);
+
+        float vertices[] = {
+        -0.8f, -0.5f, 0.0f, // left  
+        -0.2f, -0.5f, 0.0f, // right 
+        -0.5f,  0.5f, 0.0f  // top
+        };
+
+        float vertices2[] = {
+         0.2f, -0.5f, 0.0f, // right 
+         0.8f, -0.5f, 0.0f,
+         0.5f,  0.5f, 0.0f
+        };
+
+        unsigned int indices[] = {
+            // 注意索引从0开始! 
+            // 此例的索引(0,1,2,3)就是顶点数组vertices的下标，
+            // 这样可以由下标代表顶点组合成矩形
+            0, 1, 2
+        };
+
+        glGenVertexArrays(1, &VAO);
+        glGenVertexArrays(1, &VAO2);
+        glGenBuffers(1, &VBO);
+        glGenBuffers(1, &VBO2);
+        glGenBuffers(1, &EBO);
+
+        glBindVertexArray(VAO);
+        glBindBuffer(GL_ARRAY_BUFFER, VBO);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+        glEnableVertexAttribArray(0);
+
+        glBindVertexArray(VAO2);
+        glBindBuffer(GL_ARRAY_BUFFER, VBO2);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(vertices2), vertices2, GL_STATIC_DRAW);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+        glEnableVertexAttribArray(0);
+        
+
+        // note that this is allowed, the call to glVertexAttribPointer registered VBO as the vertex attribute's bound vertex buffer object so afterwards we can safely unbind
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+    }
+
 	void Draw() {
 		// render
 		// ------
@@ -150,7 +299,7 @@ public:
 
 		// draw our first triangle
 		glUseProgram(shaderProgram);
-		glBindVertexArray(VAO); // seeing as we only have a single VAO there's no need to bind it every time, but we'll do so to keep things a bit more organized
+		// glBindVertexArray(VAO); // seeing as we only have a single VAO there's no need to bind it every time, but we'll do so to keep things a bit more organized
 		glDrawArrays(GL_TRIANGLES, 0, 3);
         if (EBO) {
             glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
@@ -159,12 +308,413 @@ public:
 		// glBindVertexArray(0); // no need to unbind it every time 
 	}
 
+    void DrawTwo() {
+        // render
+        // ------
+        glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
+
+
+        // draw our first triangle
+        glUseProgram(shaderProgram);
+        glBindVertexArray(VAO);
+        glDrawArrays(GL_TRIANGLES, 0, 3);
+        glBindVertexArray(VAO2);
+        glDrawArrays(GL_TRIANGLES, 0, 3);
+        if (EBO) {
+            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+        }
+    }
+
+    void InitUniformDemo() {
+        const char* vertexShaderSource = "#version 330 core\n"
+            "layout (location = 0) in vec3 aPos;\n"
+            "out vec4 vertexColor; // 为片段着色器指定一个颜色输出\n"
+            "void main()\n"
+            "{\n"
+            "   gl_Position = vec4(aPos.x, aPos.y, aPos.z, 1.0);\n"
+            "   vertexColor = vec4(0.5, 0.0, 0.0, 1.0); // 把输出变量设置为暗红色\n"
+            "}\0";
+        vertexShader = glCreateShader(GL_VERTEX_SHADER);
+
+        glShaderSource(vertexShader, 1, &vertexShaderSource, NULL);
+        glCompileShader(vertexShader);
+
+        const char* fragmentShaderSource = "#version 330 core\n"
+            "uniform vec4 ourColor; // 从顶点着色器传来的输入变量（名称相同、类型相同）\n"
+            "out vec4 FragColor;\n"
+            "void main()\n"
+            "{\n"
+            "   FragColor = ourColor;\n"
+            "}\0";
+        fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+        glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL);
+        glCompileShader(fragmentShader);
+
+        shaderProgram = glCreateProgram();
+        glAttachShader(shaderProgram, vertexShader);
+        glAttachShader(shaderProgram, fragmentShader);
+        glLinkProgram(shaderProgram);
+
+        float vertices[] = {
+        -0.5f, -0.5f, 0.0f, // left  
+         0.5f, -0.5f, 0.0f, // right 
+         0.0f,  0.5f, 0.0f  // top   
+        };
+
+        glGenVertexArrays(1, &VAO);
+        glGenBuffers(1, &VBO);
+
+        glBindVertexArray(VAO);
+
+        glBindBuffer(GL_ARRAY_BUFFER, VBO);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+        glEnableVertexAttribArray(0);
+
+        // note that this is allowed, the call to glVertexAttribPointer registered VBO as the vertex attribute's bound vertex buffer object so afterwards we can safely unbind
+        // glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+        // You can unbind the VAO afterwards so other VAO calls won't accidentally modify this VAO, but this rarely happens. Modifying other
+        // VAOs requires a call to glBindVertexArray anyways so we generally don't unbind VAOs (nor VBOs) when it's not directly necessary.
+        glBindVertexArray(0);
+
+    }
+
+    void DrawUniform() {
+        // render
+        // ------
+        glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
+
+
+        // draw our first triangle
+        glUseProgram(shaderProgram);
+
+        float timeValue = glfwGetTime();
+        float greenValue = (sin(timeValue) / 2.0f) + 0.5f;
+        int vertexColorLocation = glGetUniformLocation(shaderProgram, "ourColor");
+        // glUseProgram(shaderProgram);
+        glUniform4f(vertexColorLocation, 0.0f, greenValue, 0.0f, 1.0f);
+
+        glBindVertexArray(VAO);
+        glDrawArrays(GL_TRIANGLES, 0, 3);
+    }
+
+    void InitMultiProp() {
+        const char* vertexShaderSource = "#version 330 core\n"
+            "layout (location = 0) in vec3 aPos;\n"
+            "layout (location = 1) in vec3 aColor; // 颜色变量的属性位置值为 1\n"
+            "out vec3 ourColor; // 向片段着色器输出一个颜色\n"
+            "void main()\n"
+            "{\n"
+            "   gl_Position = vec4(aPos.x, aPos.y, aPos.z, 1.0);\n"
+            "   ourColor = aColor; // 将ourColor设置为我们从顶点数据那里得到的输入颜色\n"
+            "}\0";
+        vertexShader = glCreateShader(GL_VERTEX_SHADER);
+
+        glShaderSource(vertexShader, 1, &vertexShaderSource, NULL);
+        glCompileShader(vertexShader);
+
+        const char* fragmentShaderSource = "#version 330 core\n"
+            "in vec3 ourColor;\n"
+            "out vec4 FragColor;\n"
+            "void main()\n"
+            "{\n"
+            "   FragColor = vec4(ourColor, 1.0f);\n"
+            "}\0";
+        fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+        glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL);
+        glCompileShader(fragmentShader);
+
+        shaderProgram = glCreateProgram();
+        glAttachShader(shaderProgram, vertexShader);
+        glAttachShader(shaderProgram, fragmentShader);
+        glLinkProgram(shaderProgram);
+
+        float vertices[] = {
+            // 位置              // 颜色
+             0.5f, -0.5f, 0.0f,  1.0f, 0.0f, 0.0f,   // 右下
+            -0.5f, -0.5f, 0.0f,  0.0f, 1.0f, 0.0f,   // 左下
+             0.0f,  0.5f, 0.0f,  0.0f, 0.0f, 1.0f    // 顶部
+        };
+
+        glGenVertexArrays(1, &VAO);
+        glGenBuffers(1, &VBO);
+
+        glBindVertexArray(VAO);
+
+        glBindBuffer(GL_ARRAY_BUFFER, VBO);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
+        glEnableVertexAttribArray(0);
+        // 颜色属性
+        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
+        glEnableVertexAttribArray(1);
+
+        // note that this is allowed, the call to glVertexAttribPointer registered VBO as the vertex attribute's bound vertex buffer object so afterwards we can safely unbind
+        // glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+        // You can unbind the VAO afterwards so other VAO calls won't accidentally modify this VAO, but this rarely happens. Modifying other
+        // VAOs requires a call to glBindVertexArray anyways so we generally don't unbind VAOs (nor VBOs) when it's not directly necessary.
+        glBindVertexArray(0); 
+    }
+
+
+    void InitMultiPropMove() {
+        const char* vertexShaderSource = "#version 330 core\n"
+            "layout (location = 0) in vec3 aPos;\n"
+            "layout (location = 1) in vec3 aColor; // 颜色变量的属性位置值为 1\n"
+            "out vec3 ourColor; // 向片段着色器输出一个颜色\n"
+            "uniform float yOffset;\n"
+            "void main()\n"
+            "{\n"
+            "   vec3 pos = aPos;\n"
+            "   if(gl_VertexID == 2) {\n"  // 第3个顶点（索引为2）是顶部点
+            "       pos.y *= yOffset;\n"
+            "   }\n"
+            "   gl_Position = vec4(pos, 1.0);\n"
+            "   ourColor = aColor; // 将ourColor设置为我们从顶点数据那里得到的输入颜色\n"
+            "}\0";
+        vertexShader = glCreateShader(GL_VERTEX_SHADER);
+
+        glShaderSource(vertexShader, 1, &vertexShaderSource, NULL);
+        glCompileShader(vertexShader);
+
+        const char* fragmentShaderSource = "#version 330 core\n"
+            "in vec3 ourColor;\n"
+            "out vec4 FragColor;\n"
+            "void main()\n"
+            "{\n"
+            "   FragColor = vec4(ourColor, 1.0f);\n"
+            "}\0";
+        fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+        glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL);
+        glCompileShader(fragmentShader);
+
+        shaderProgram = glCreateProgram();
+        glAttachShader(shaderProgram, vertexShader);
+        glAttachShader(shaderProgram, fragmentShader);
+        glLinkProgram(shaderProgram);
+
+        float vertices[] = {
+            // 位置              // 颜色
+             0.5f,  0.0f, 0.0f,  1.0f, 0.0f, 0.0f,   // 右下
+            -0.5f,  0.0f, 0.0f,  0.0f, 1.0f, 0.0f,   // 左下
+             0.0f,  0.5f, 0.0f,  0.0f, 0.0f, 1.0f    // 顶部
+        };
+
+        glGenVertexArrays(1, &VAO);
+        glGenBuffers(1, &VBO);
+
+        glBindVertexArray(VAO);
+
+        glBindBuffer(GL_ARRAY_BUFFER, VBO);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
+        glEnableVertexAttribArray(0);
+        // 颜色属性
+        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
+        glEnableVertexAttribArray(1);
+
+        // note that this is allowed, the call to glVertexAttribPointer registered VBO as the vertex attribute's bound vertex buffer object so afterwards we can safely unbind
+        // glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+        // You can unbind the VAO afterwards so other VAO calls won't accidentally modify this VAO, but this rarely happens. Modifying other
+        // VAOs requires a call to glBindVertexArray anyways so we generally don't unbind VAOs (nor VBOs) when it's not directly necessary.
+        glBindVertexArray(0);
+    }
+
+    void InitMultiPropLRMove() {
+        const char* vertexShaderSource = "#version 330 core\n"
+            "layout (location = 0) in vec3 aPos;\n"
+            "layout (location = 1) in vec3 aColor; // 颜色变量的属性位置值为 1\n"
+            "out vec3 ourColor; // 向片段着色器输出一个颜色\n"
+            "uniform vec3 lrOffset;\n"
+            "void main()\n"
+            "{\n"
+            "   vec3 pos = aPos + lrOffset;\n"
+            "   gl_Position = vec4(pos, 1.0);\n"
+            "   ourColor = aColor; // 将ourColor设置为我们从顶点数据那里得到的输入颜色\n"
+            "}\0";
+        vertexShader = glCreateShader(GL_VERTEX_SHADER);
+
+        glShaderSource(vertexShader, 1, &vertexShaderSource, NULL);
+        glCompileShader(vertexShader);
+
+        const char* fragmentShaderSource = "#version 330 core\n"
+            "in vec3 ourColor;\n"
+            "out vec4 FragColor;\n"
+            "void main()\n"
+            "{\n"
+            "   FragColor = vec4(ourColor, 1.0f);\n"
+            "}\0";
+        fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+        glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL);
+        glCompileShader(fragmentShader);
+
+        shaderProgram = glCreateProgram();
+        glAttachShader(shaderProgram, vertexShader);
+        glAttachShader(shaderProgram, fragmentShader);
+        glLinkProgram(shaderProgram);
+
+        float vertices[] = {
+            // 位置              // 颜色
+             0.5f,  0.0f, 0.0f,  1.0f, 0.0f, 0.0f,   // 右下
+            -0.5f,  0.0f, 0.0f,  0.0f, 1.0f, 0.0f,   // 左下
+             0.0f,  0.5f, 0.0f,  0.0f, 0.0f, 1.0f    // 顶部
+        };
+
+        glGenVertexArrays(1, &VAO);
+        glGenBuffers(1, &VBO);
+
+        glBindVertexArray(VAO);
+
+        glBindBuffer(GL_ARRAY_BUFFER, VBO);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
+        glEnableVertexAttribArray(0);
+        // 颜色属性
+        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
+        glEnableVertexAttribArray(1);
+
+        // note that this is allowed, the call to glVertexAttribPointer registered VBO as the vertex attribute's bound vertex buffer object so afterwards we can safely unbind
+        // glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+        // You can unbind the VAO afterwards so other VAO calls won't accidentally modify this VAO, but this rarely happens. Modifying other
+        // VAOs requires a call to glBindVertexArray anyways so we generally don't unbind VAOs (nor VBOs) when it's not directly necessary.
+        glBindVertexArray(0);
+    }
+
+
+    void DrawMultiMove() {
+        // render
+        // ------
+        glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
+
+
+        // draw our first triangle
+        glUseProgram(shaderProgram);
+        int vertexOffset = glGetUniformLocation(shaderProgram, "yOffset");
+        // glUseProgram(shaderProgram);
+        glUniform1f(vertexOffset, cos(glfwGetTime() * 2.0f));
+
+        glBindVertexArray(VAO);
+        glDrawArrays(GL_TRIANGLES, 0, 3);
+    }
+
+    void DrawMultiLRMove() {
+        // render
+        // ------
+        glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
+
+
+        // draw our first triangle
+        glUseProgram(shaderProgram);
+        int vertexOffset = glGetUniformLocation(shaderProgram, "lrOffset");
+        // glUseProgram(shaderProgram);
+        glUniform3f(vertexOffset, cos(glfwGetTime() * 2.0f), 0, 0);
+
+        glBindVertexArray(VAO);
+        glDrawArrays(GL_TRIANGLES, 0, 3);
+    }
+
+    void InitVecToClr() {
+        const char* vertexShaderSource = "#version 330 core\n"
+            "layout (location = 0) in vec3 aPos;\n"
+            "layout (location = 1) in vec3 aColor; // 颜色变量的属性位置值为 1\n"
+            "out vec3 ourColor; // 向片段着色器输出一个颜色\n"
+            "uniform vec3 lrOffset;\n"
+            "void main()\n"
+            "{\n"
+            "   vec3 pos = aPos + lrOffset;\n"
+            "   gl_Position = vec4(pos, 1.0);\n"
+            "   ourColor = abs(pos); \n"
+            "}\0";
+        vertexShader = glCreateShader(GL_VERTEX_SHADER);
+
+        glShaderSource(vertexShader, 1, &vertexShaderSource, NULL);
+        glCompileShader(vertexShader);
+
+        const char* fragmentShaderSource = "#version 330 core\n"
+            "in vec3 ourColor;\n"
+            "out vec4 FragColor;\n"
+            "void main()\n"
+            "{\n"
+            "   FragColor = vec4(ourColor, 1.0f);\n"
+            "}\0";
+        fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+        glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL);
+        glCompileShader(fragmentShader);
+
+        shaderProgram = glCreateProgram();
+        glAttachShader(shaderProgram, vertexShader);
+        glAttachShader(shaderProgram, fragmentShader);
+        glLinkProgram(shaderProgram);
+
+        float vertices[] = {
+            // 位置              // 颜色
+             0.5f,  0.0f, 0.0f,  1.0f, 0.0f, 0.0f,   // 右下
+            -0.5f,  0.0f, 0.0f,  0.0f, 1.0f, 0.0f,   // 左下
+             0.0f,  0.5f, 0.0f,  0.0f, 0.0f, 1.0f    // 顶部
+        };
+
+        glGenVertexArrays(1, &VAO);
+        glGenBuffers(1, &VBO);
+
+        glBindVertexArray(VAO);
+
+        glBindBuffer(GL_ARRAY_BUFFER, VBO);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
+        glEnableVertexAttribArray(0);
+        // 颜色属性
+        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
+        glEnableVertexAttribArray(1);
+
+        // note that this is allowed, the call to glVertexAttribPointer registered VBO as the vertex attribute's bound vertex buffer object so afterwards we can safely unbind
+        // glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+        // You can unbind the VAO afterwards so other VAO calls won't accidentally modify this VAO, but this rarely happens. Modifying other
+        // VAOs requires a call to glBindVertexArray anyways so we generally don't unbind VAOs (nor VBOs) when it's not directly necessary.
+        glBindVertexArray(0);
+    }
+
+    void DrawVecToClr() {
+        // render
+        // ------
+        glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
+
+
+        // draw our first triangle
+        glUseProgram(shaderProgram);
+        int vertexOffset = glGetUniformLocation(shaderProgram, "lrOffset");
+        // glUseProgram(shaderProgram);
+        float time = glfwGetTime();
+        float radiusX = 0.5f;  // x轴半径
+        float radiusY = 0.3f;  // y轴半径
+        glUniform3f(vertexOffset, cos(time) * radiusX, sin(time) * radiusY, 0);
+
+        glBindVertexArray(VAO);
+        glDrawArrays(GL_TRIANGLES, 0, 3);
+    }
+
 private:
 	unsigned int vertexShader;
 	unsigned int fragmentShader;
 	unsigned int shaderProgram;
 
 	unsigned int VAO;
+	unsigned int VAO2;
 	unsigned int VBO;
+	unsigned int VBO2;
 	unsigned int EBO;
 };
