@@ -32,6 +32,19 @@ int main()
         return -1;
     }
 
+    // Setup Dear ImGui context
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGuiIO& io = ImGui::GetIO(); (void)io;
+
+    // Setup Dear ImGui style
+    ImGui::StyleColorsDark();
+    // ImGui::StyleColorsClassic();
+
+    // Setup Platform/Renderer backends
+    ImGui_ImplGlfw_InitForOpenGL(window, true);
+    ImGui_ImplOpenGL3_Init("#version 330");
+
     glViewport(0, 0, 800, 600);
 
     
@@ -45,7 +58,8 @@ int main()
     // draw.InitMultiPropMove();
     // draw.InitMultiPropLRMove();
     // draw.InitVecToClr();
-    draw.InitTexture();
+    // draw.InitTexture();
+    draw.InitFaceTexture();
 
     while (!glfwWindowShouldClose(window))
     {
@@ -56,12 +70,16 @@ int main()
         // draw.DrawMultiMove();
         // draw.DrawMultiLRMove();
         // draw.DrawVecToClr();
-        draw.DrawTexture();
+        // draw.DrawTexture();
+        draw.DrawTwoTexture();
 
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
-
+    // Cleanup
+    ImGui_ImplOpenGL3_Shutdown();
+    ImGui_ImplGlfw_Shutdown();
+    ImGui::DestroyContext();
 
     glfwTerminate();
     return 0;

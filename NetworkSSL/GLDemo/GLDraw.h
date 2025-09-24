@@ -10,6 +10,10 @@
 
 #include "shader.h"
 
+#include <imgui.h>
+#include <imgui_impl_glfw.h>
+#include <imgui_impl_opengl3.h>
+
 class GLDraw
 {
 public:
@@ -637,7 +641,8 @@ public:
     }
 
     void InitVecToClr() {
-        const char* vertexShaderSource = "#version 330 core\n"
+        const char* vertexShaderSource = 
+            "#version 330 core\n"
             "layout (location = 0) in vec3 aPos;\n"
             "layout (location = 1) in vec3 aColor; // 颜色变量的属性位置值为 1\n"
             "out vec3 ourColor; // 向片段着色器输出一个颜色\n"
@@ -772,6 +777,117 @@ public:
 
         float vertices[] = {
             //     ---- 位置 ----       ---- 颜色 ----     - 纹理坐标 -
+                 0.5f,  0.5f, 0.0f,   1.0f, 0.0f, 0.0f,   2.0f, 2.0f,   // 右上
+                 0.5f, -0.5f, 0.0f,   0.0f, 1.0f, 0.0f,   2.0f, 0.0f,   // 右下
+                -0.5f, -0.5f, 0.0f,   0.0f, 0.0f, 1.0f,   0.0f, 0.0f,   // 左下
+                -0.5f,  0.5f, 0.0f,   1.0f, 1.0f, 0.0f,   0.0f, 2.0f    // 左上
+        };
+
+        unsigned int indices[] = {
+        0, 1, 3, // first triangle
+        1, 2, 3  // second triangle
+        };
+        glGenVertexArrays(1, &VAO);
+        glGenBuffers(1, &VBO);
+        glGenBuffers(1, &EBO);
+
+        glBindVertexArray(VAO);
+
+        glBindBuffer(GL_ARRAY_BUFFER, VBO);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
+
+        // position attribute
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
+        glEnableVertexAttribArray(0);
+        // color attribute
+        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(3 * sizeof(float)));
+        glEnableVertexAttribArray(1);
+        // texture coord attribute
+        glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(6 * sizeof(float)));
+        glEnableVertexAttribArray(2);
+    }
+
+    void InitFaceTexture() {
+        const char* vertexShaderSource = "#version 330 core\n"
+            "layout (location = 0) in vec3 aPos;\n"
+            "layout (location = 1) in vec3 aColor;\n"
+            "layout (location = 2) in vec2 aTexCoord;\n"
+            "out vec3 ourColor;\n"
+            "out vec2 TexCoord;\n"
+            "void main()\n"
+            "{\n"
+            "   gl_Position = vec4(aPos, 1.0);\n"
+            "   ourColor = aColor;\n"
+            "   TexCoord = vec2(aTexCoord.x, aTexCoord.y);\n"
+            "}\0";
+
+        const char* fragmentShaderSource = "#version 330 core\n"
+            "out vec4 FragColor;\n"
+            "in vec3 ourColor;\n"
+            "in vec2 TexCoord;\n"
+            "uniform sampler2D texture1;\n"
+            "uniform sampler2D texture2;\n"
+            "uniform float mixValue; // 新增\n"
+            "void main()\n"
+            "{\n"
+            // "   FragColor = mix(texture(texture1, TexCoord), texture(texture2, TexCoord), 0.2) * vec4(ourColor, 1.0);\n"
+            "   FragColor = mix(texture(texture1, TexCoord), texture(texture2, vec2(1.0 - TexCoord.x, TexCoord.y)), mixValue) * vec4(ourColor, 1.0);\n"
+            "}\0";
+
+        outshader = new Shader(vertexShaderSource, fragmentShaderSource, false);
+
+        glGenTextures(1, &texture);
+        glBindTexture(GL_TEXTURE_2D, texture);
+
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+        int width, height, nrChannels;
+        // 需要先下载container.jpg哦，地址是 https://learnopengl-cn.github.io/img/01/06/container.jpg 
+        // 另外一个笑脸下载地址：https://learnopengl-cn.github.io/img/01/06/awesomeface.png
+        unsigned char* data = stbi_load("container.jpg", &width, &height, &nrChannels, 0);
+
+        if (data)
+        {
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
+            glGenerateMipmap(GL_TEXTURE_2D);
+        }
+        else
+        {
+            std::cout << "Failed to load texture" << std::endl;
+        }
+        stbi_image_free(data);
+
+        glGenTextures(1, &texture2);
+        glBindTexture(GL_TEXTURE_2D, texture2);
+
+        // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+        // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        stbi_set_flip_vertically_on_load(true);
+        data = stbi_load("awesomeface.png", &width, &height, &nrChannels, 0);
+
+        if (data)
+        {
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+            glGenerateMipmap(GL_TEXTURE_2D);
+        }
+        else
+        {
+            std::cout << "Failed to load texture" << std::endl;
+        }
+        stbi_image_free(data);
+
+        float vertices[] = {
+            //     ---- 位置 ----       ---- 颜色 ----     - 纹理坐标 -
                  0.5f,  0.5f, 0.0f,   1.0f, 0.0f, 0.0f,   1.0f, 1.0f,   // 右上
                  0.5f, -0.5f, 0.0f,   0.0f, 1.0f, 0.0f,   1.0f, 0.0f,   // 右下
                 -0.5f, -0.5f, 0.0f,   0.0f, 0.0f, 1.0f,   0.0f, 0.0f,   // 左下
@@ -803,6 +919,31 @@ public:
         // texture coord attribute
         glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(6 * sizeof(float)));
         glEnableVertexAttribArray(2);
+
+        outshader->use();
+        glUniform1i(glGetUniformLocation(outshader->ID, "texture1"), 0);
+        // or set it via the texture class
+        outshader->setInt("texture2", 1);
+    }
+
+    void applyTextureSettings(unsigned int textureID, int wrapMode, bool useNearest) {
+        glBindTexture(GL_TEXTURE_2D, textureID);
+
+        GLenum wrap;
+        switch (wrapMode) {
+        case 0: wrap = GL_REPEAT; break;
+        case 1: wrap = GL_MIRRORED_REPEAT; break;
+        case 2: wrap = GL_CLAMP_TO_EDGE; break;
+        case 3: wrap = GL_CLAMP_TO_BORDER; break;
+        default: wrap = GL_REPEAT; break;
+        }
+
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, wrap);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, wrap);
+
+        GLenum filter = useNearest ? GL_NEAREST : GL_LINEAR;
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filter);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filter);
     }
 
     void DrawTexture() {
@@ -822,12 +963,67 @@ public:
         glBindVertexArray(VAO);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
     }
+    
+    void DrawTwoTexture() {
+        // render
+        // ------
+        glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
+
+        // Start the Dear ImGui frame
+        ImGui_ImplOpenGL3_NewFrame();
+        ImGui_ImplGlfw_NewFrame();
+        ImGui::NewFrame();
+
+        // ImGui 控制面板
+        {
+            static float mixValue = 0.2f;
+            static int wrapMode = 0;
+            static bool useNearest = true;
+
+            ImGui::Begin("Texture Controls");
+
+            ImGui::SliderFloat("Mix Value", &mixValue, 0.0f, 1.0f);
+
+            const char* wrapModes[] = { "REPEAT", "MIRRORED_REPEAT", "CLAMP_TO_EDGE", "CLAMP_TO_BORDER" };
+            ImGui::Combo("Wrap Mode", &wrapMode, wrapModes, 4);
+
+            ImGui::Checkbox("Use GL_NEAREST", &useNearest);
+
+            // 应用设置到纹理
+            applyTextureSettings(texture2, wrapMode, useNearest);
+            // 更新 shader 中的 mix 值
+            outshader->use();
+            outshader->setFloat("mixValue", mixValue);
+
+            ImGui::End();
+        }
+
+
+        if (outshader) {
+            outshader->use();
+        }
+        // bind Texture
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, texture);
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D, texture2);
+
+        // render container
+        // ourShader.use();
+        glBindVertexArray(VAO);
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+
+        ImGui::Render();
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+    }
 
 private:
 	unsigned int vertexShader;
 	unsigned int fragmentShader;
 	unsigned int shaderProgram;
     unsigned int texture;
+    unsigned int texture2;
 
 	unsigned int VAO;
 	unsigned int VAO2;
