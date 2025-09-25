@@ -1,12 +1,13 @@
 #include <glad/glad.h>
 #include <imgui.h>
 #include <iostream>
-#include "in3d.h"
+#include "camera.h"
 #include <GLFW/glfw3.h>
 
 #include "stb_image.h"
+#include "MouseMng.h"
 
-void in3dDemo::Initialize() {
+void CameraDemo::Initialize() {
     // 着色器代码
     const char* vertexShaderSource = "#version 330 core\n"
         "layout (location = 0) in vec3 aPos;\n"
@@ -120,11 +121,12 @@ void in3dDemo::Initialize() {
     // ...
 }
 
-void in3dDemo::Update(float deltaTime) {
-    // 自动旋转逻辑
+void CameraDemo::Update(float deltaTime) {
+    
+
 }
 
-void in3dDemo::Render() {
+void CameraDemo::Render() {
 
     float aspectRatio = 1200.0f / 800.0f;
     // 创建变换矩阵
@@ -142,13 +144,19 @@ void in3dDemo::Render() {
     else {
         model = glm::rotate(model, rotate_speed_ * (float)glfwGetTime() * glm::radians(model_angle_), glm::vec3(0.5f, 1.0f, 0.0f));
     }
-    glm::mat4 view = glm::mat4(1.0f);
-    // 注意，我们将矩阵向我们要进行移动场景的反方向移动。
-    view = glm::translate(view, glm::vec3(0.0f, 0.0f, zoffset_));
+    //glm::mat4 view = glm::mat4(1.0f);
+    //// 注意，我们将矩阵向我们要进行移动场景的反方向移动。
+    //view = glm::translate(view, glm::vec3(0.0f, 0.0f, zoffset_));
+
+    /*float radius = 10.0f;
+    float camX = sin(glfwGetTime()) * radius;
+    float camZ = cos(glfwGetTime()) * radius;
+    glm::mat4 view = glm::lookAt(glm::vec3(camX, 0.0, camZ), glm::vec3(0.0, 0.0, 0.0), glm::vec3(0.0, 1.0, 0.0));*/
+    glm::mat4 view = view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);;
 
     glm::mat4 projection = glm::mat4(1.0f);
     projection = glm::perspective(glm::radians(fovy_), aspectRatio, 0.1f, 100.0f);
-    
+
     shader->setMat4("model", model);
     shader->setMat4("view", view);
     shader->setMat4("projection", projection);
@@ -188,7 +196,7 @@ void in3dDemo::Render() {
 
         float angle = 20.0f * i;
         model_pos = glm::rotate(model_pos, glm::radians(angle), glm::vec3(1.0f, 0.3f, 0.5f));
-        
+
 
         shader->setMat4("model", model_pos);
 
@@ -199,7 +207,7 @@ void in3dDemo::Render() {
     // glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 }
 
-void in3dDemo::RenderImGui() {
+void CameraDemo::RenderImGui() {
     static float mixValue = 0.2f;
     static int wrapMode = 0;
     static bool useNearest = true;
@@ -209,13 +217,19 @@ void in3dDemo::RenderImGui() {
     // 变换控制
     ImGui::Text("Transform Controls:");
     ImGui::Separator();
-    
+
     // x rotate angle
     ImGui::SliderFloat("model angle", &model_angle_, -180.0f, 180.0f);
     // scene move
     ImGui::SliderFloat("z offset", &zoffset_, -10.0f, 10.0f);
     // perspective angle
     ImGui::SliderFloat("fov", &fovy_, 1.0f, 90.0f);
+
+    ImGui::SliderFloat("camera speed", &camera_speed_, 0.01f, 10.0f);
+    ImGui::SliderFloat("mouse sensitive", &mouse_sens_, 0.01f, 10.0f);
+    ImGui::SliderFloat("scroll sensitive", &scroll_sensitivity_, 0.01f, 10.0f);
+    ImGui::SliderFloat("yaw", &yaw_, -89.0f, 89.0f);
+    ImGui::SliderFloat("pitch", &pitch_, -89.0f, 89.0f);
 
     ImGui::Checkbox("Auto Rotate", &auto_rotate_);
     if (auto_rotate_) {
@@ -239,20 +253,59 @@ void in3dDemo::RenderImGui() {
     ImGui::End();
 }
 
-void in3dDemo::Cleanup() {
+void CameraDemo::Cleanup() {
     // 清理资源
     shader.reset();
 }
 
-void in3dDemo::ProcInput(GLFWwindow* window, float deltaTime)
+void CameraDemo::ProcInput(GLFWwindow* window, float deltaTime)
 {
+    float cameraSpeed = camera_speed_ * deltaTime; // adjust accordingly
+    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+        cameraPos += cameraSpeed * cameraFront;
+    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+        cameraPos -= cameraSpeed * cameraFront;
+    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+        cameraPos -= glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
+    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+        cameraPos += glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
+
+    if (MouseManager::Get().IsLeftButtonPressed()) {
+
+        glm::vec2 mouse_delta = MouseManager::Get().GetMouseDelta();
+
+        mouse_delta.x *= mouse_sens_;
+        mouse_delta.y *= mouse_sens_;
+
+        yaw_ += mouse_delta.x * deltaTime;
+        pitch_ += mouse_delta.y * deltaTime;
+
+        if (pitch_ > 89.0f)
+            pitch_ = 89.0f;
+        if (pitch_ < -89.0f)
+            pitch_ = -89.0f;
+
+        glm::vec3 front;
+        front.x = cos(glm::radians(yaw_)) * cos(glm::radians(pitch_));
+        front.y = sin(glm::radians(pitch_));
+        front.z = sin(glm::radians(yaw_)) * cos(glm::radians(pitch_));
+        cameraFront = glm::normalize(front);
+    }
+
+    
+    if (fovy_ >= 1.0f && fovy_ <= 45.0f)
+        fovy_ -= MouseManager::Get().GetScrollY() * scroll_sensitivity_;
+    if (fovy_ <= 1.0f)
+        fovy_ = 1.0f;
+    if (fovy_ >= 45.0f)
+        fovy_ = 45.0f;
 }
 
-std::string in3dDemo::GetName() const {
-    return "My New Demo";
+std::string CameraDemo::GetName() const {
+    return "Camera Demo";
 }
 
-void in3dDemo::createBasicTextures()
+void CameraDemo::createBasicTextures()
 {
     glGenTextures(1, &texture1);
     glBindTexture(GL_TEXTURE_2D, texture1);
@@ -308,7 +361,7 @@ void in3dDemo::createBasicTextures()
 
 }
 
-void in3dDemo::applyTextureSettings(unsigned int textureID, int wrapMode, bool useNearest) {
+void CameraDemo::applyTextureSettings(unsigned int textureID, int wrapMode, bool useNearest) {
     glBindTexture(GL_TEXTURE_2D, textureID);
 
     GLenum wrap;

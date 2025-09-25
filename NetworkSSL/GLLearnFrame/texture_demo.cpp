@@ -191,6 +191,10 @@ void TextureDemo::Cleanup() {
     shader.reset();
 }
 
+void TextureDemo::ProcInput(GLFWwindow* window, float deltaTime)
+{
+}
+
 std::string TextureDemo::GetName() const {
     return "Texture Demo";
 }

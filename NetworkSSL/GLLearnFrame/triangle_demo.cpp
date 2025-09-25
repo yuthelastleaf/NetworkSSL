@@ -72,6 +72,10 @@ void TriangleDemo::Cleanup() {
     shader.reset();
 }
 
+void TriangleDemo::ProcInput(GLFWwindow* window, float deltaTime)
+{
+}
+
 std::string TriangleDemo::GetName() const {
     return "Triangle Demo";
 }

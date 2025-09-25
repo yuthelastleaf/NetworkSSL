@@ -28,6 +28,15 @@
     <Filter Include="3D">
       <UniqueIdentifier>{ac0f25ee-4889-4fa8-8d9e-a015a3fed2a2}</UniqueIdentifier>
     </Filter>
+    <Filter Include="camera">
+      <UniqueIdentifier>{c9a4aca1-5ded-4b19-99ab-15462fa06c94}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="MouseMng">
+      <UniqueIdentifier>{1789e68f-4316-482f-9a75-a88c27e81360}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Light">
+      <UniqueIdentifier>{f99e9886-07ea-45e8-8918-66cdc112142c}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -57,6 +66,12 @@
     <ClCompile Include="in3d.cpp">
       <Filter>3D</Filter>
     </ClCompile>
+    <ClCompile Include="camera.cpp">
+      <Filter>camera</Filter>
+    </ClCompile>
+    <ClCompile Include="LightColor.cpp">
+      <Filter>Light</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="shader.h">
@@ -76,6 +91,15 @@
     </ClInclude>
     <ClInclude Include="in3d.h">
       <Filter>3D</Filter>
+    </ClInclude>
+    <ClInclude Include="camera.h">
+      <Filter>camera</Filter>
+    </ClInclude>
+    <ClInclude Include="MouseMng.h">
+      <Filter>MouseMng</Filter>
+    </ClInclude>
+    <ClInclude Include="LightColor.h">
+      <Filter>Light</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

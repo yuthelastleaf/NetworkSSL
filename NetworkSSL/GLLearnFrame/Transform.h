@@ -16,6 +16,7 @@ public:
     void Render() override;
     void RenderImGui() override;
     void Cleanup() override;
+    void ProcInput(struct GLFWwindow* window, float deltaTime) override;
     std::string GetName() const override;
 
 private:

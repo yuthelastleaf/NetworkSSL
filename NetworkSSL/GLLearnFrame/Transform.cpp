@@ -195,6 +195,10 @@ void TransformDemo::Cleanup() {
     shader.reset();
 }
 
+void TransformDemo::ProcInput(GLFWwindow* window, float deltaTime)
+{
+}
+
 std::string TransformDemo::GetName() const {
     return "My New Demo";
 }

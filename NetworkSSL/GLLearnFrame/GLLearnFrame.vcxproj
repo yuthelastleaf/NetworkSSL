@@ -143,8 +143,10 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="camera.cpp" />
     <ClCompile Include="in3d.cpp" />
     <ClCompile Include="demo_manager.cpp" />
+    <ClCompile Include="LightColor.cpp" />
     <ClCompile Include="opengl_app.cpp" />
     <ClCompile Include="texture_demo.cpp" />
     <ClCompile Include="Transform.cpp" />
@@ -155,8 +157,11 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\GLDemo\stb_image.h" />
+    <ClInclude Include="camera.h" />
     <ClInclude Include="demo.h" />
     <ClInclude Include="in3d.h" />
+    <ClInclude Include="LightColor.h" />
+    <ClInclude Include="MouseMng.h" />
     <ClInclude Include="shader.h" />
     <ClInclude Include="Transform.h" />
     <ClInclude Include="utils.h" />

@@ -21,8 +21,9 @@ void DemoManager::SetCurrentDemo(const std::string& name) {
     }
 }
 
-void DemoManager::Update(float deltaTime) {
+void DemoManager::Update(struct GLFWwindow* window, float deltaTime) {
     if (currentDemo) {
+        currentDemo->ProcInput(window, deltaTime);
         currentDemo->Update(deltaTime);
     }
 }

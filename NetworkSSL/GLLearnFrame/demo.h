@@ -3,7 +3,7 @@
 #include <memory>
 #include <map>
 #include <vector>
-
+#include "utils.h"
 #include "shader.h"
 
 // Demo 基类
@@ -16,6 +16,8 @@ public:
     virtual void RenderImGui() = 0;
     virtual void Cleanup() = 0;
     virtual std::string GetName() const = 0;
+
+    virtual void ProcInput(struct GLFWwindow* window, float deltaTime) = 0;
 };
 
 // 三角形 Demo
@@ -30,6 +32,7 @@ public:
     void Render() override;
     void RenderImGui() override;
     void Cleanup() override;
+    void ProcInput(struct GLFWwindow* window, float deltaTime) override;
     std::string GetName() const override;
 };
 
@@ -46,6 +49,7 @@ public:
     void Render() override;
     void RenderImGui() override;
     void Cleanup() override;
+    void ProcInput(struct GLFWwindow* window, float deltaTime) override;
     std::string GetName() const override;
 
 private:
@@ -63,7 +67,7 @@ private:
 public:
     void RegisterDemo(const std::string& name, std::unique_ptr<Demo> demo);
     void SetCurrentDemo(const std::string& name);
-    void Update(float deltaTime);
+    void Update(struct GLFWwindow* window, float deltaTime);
     void Render();
     void RenderImGui();
     std::vector<std::string> GetDemoNames() const;

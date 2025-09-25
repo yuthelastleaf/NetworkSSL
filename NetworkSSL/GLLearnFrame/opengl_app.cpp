@@ -9,6 +9,9 @@
 #include <memory>
 #include "Transform.h"
 #include "in3d.h"
+#include "camera.h"
+#include "MouseMng.h"
+#include "LightColor.h"
 
 bool OpenGLApp::Initialize() {
     // GLFW 初始化
@@ -27,13 +30,14 @@ bool OpenGLApp::Initialize() {
 
     glfwMakeContextCurrent(window);
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
+    // glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
     // GLAD 初始化
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
         std::cout << "Failed to initialize GLAD" << std::endl;
         return false;
     }
-
+    MouseManager::Get().RegisterCallbacks(window);
     // ImGui 初始化
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -47,6 +51,8 @@ bool OpenGLApp::Initialize() {
     demoManager.RegisterDemo("texture", std::make_unique<TextureDemo>());
     demoManager.RegisterDemo("transform", std::make_unique<TransformDemo>());
     demoManager.RegisterDemo("in3d", std::make_unique<in3dDemo>());
+    demoManager.RegisterDemo("CameraDemo", std::make_unique<CameraDemo>());
+    demoManager.RegisterDemo("LightColorDemo", std::make_unique<LightColorDemo>());
 
     std::cout << "OpenGL Learning Framework initialized successfully!" << std::endl;
     return true;
@@ -79,7 +85,7 @@ void OpenGLApp::Run(const std::string& initialDemo) {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         // 更新和渲染
-        demoManager.Update(deltaTime);
+        demoManager.Update(window, deltaTime);
         demoManager.Render();
 
         // ImGui 渲染
