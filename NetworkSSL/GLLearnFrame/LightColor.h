@@ -25,10 +25,16 @@ public:
 
 private:
     void createBasicTextures();
+    void updateOrbitCamera();
     void applyTextureSettings(unsigned int textureID, int wrapMode, bool useNearest);
     unsigned int createSolidColorTexture(float r, float g, float b, float a);
 
 private:
+    // 轨道相机参数
+    float orbit_radius_ = 3.0f;           // 相机到目标的距离
+    float orbit_yaw_ = 0.0f;              // 水平角度
+    float orbit_pitch_ = 0.0f;            // 垂直角度
+    glm::vec3 orbit_target_ = glm::vec3(0.0f, 0.0f, 0.0f);  // 观察目标点
 
     float model_angle_ = -55.0f;
     float zoffset_ = -3.0f;

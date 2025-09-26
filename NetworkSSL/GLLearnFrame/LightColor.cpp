@@ -11,25 +11,35 @@ void LightColorDemo::Initialize() {
     // 着色器代码
     const char* vertexShaderSource = "#version 330 core\n"
         "layout (location = 0) in vec3 aPos;\n"
-        "layout (location = 1) in vec2 aTexCoord;\n"
+        "layout (location = 1) in vec3 aNormal;\n"
+        "layout (location = 2) in vec2 aTexCoord;\n"
         "uniform mat4 model;\n"
         "uniform mat4 view;\n"
         "uniform mat4 projection;\n"
         "out vec2 TexCoord;\n"
+        "out vec3 Normal;\n"
+        "out vec3 FragPos;\n"
         "void main()\n"
         "{\n"
         "   gl_Position = projection * view * model * vec4(aPos, 1.0);\n"
+        "   FragPos = vec3(model * vec4(aPos, 1.0));\n"
         "   TexCoord = vec2(aTexCoord.x, aTexCoord.y);\n"
+        "   Normal = aNormal;\n"
         "}\0";
 
     const char* fragmentShaderSource = "#version 330 core\n"
         "out vec4 FragColor;\n"
         "in vec2 TexCoord;\n"
+        "in vec3 Normal;\n"
+        "in vec3 FragPos;\n"
         "uniform sampler2D texture;\n"
         "uniform vec3 lightColor;\n"
+        "uniform vec3 lightPos;\n"
         "void main()\n"
         "{\n"
         "   FragColor = texture(texture, TexCoord) * vec4(lightColor, 1.0);\n"
+        "   vec3 norm = normalize(Normal);\n"
+        "   vec3 lightDir = normalize(lightPos - FragPos);\n"
         "}\0";
 
     shader = std::make_unique<Shader>(vertexShaderSource, fragmentShaderSource, true);
@@ -51,44 +61,47 @@ void LightColorDemo::Initialize() {
     //};
 
     float vertices[] = {
-    -0.5f, -0.5f, -0.5f, 0.0f, 0.0f,
-     0.5f, -0.5f, -0.5f, 1.0f, 0.0f,
-     0.5f,  0.5f, -0.5f, 1.0f, 1.0f,
-     0.5f,  0.5f, -0.5f, 1.0f, 1.0f,
-    -0.5f,  0.5f, -0.5f, 0.0f, 1.0f,
-    -0.5f, -0.5f, -0.5f, 0.0f, 0.0f,
-    -0.5f, -0.5f,  0.5f, 0.0f, 0.0f,
-     0.5f, -0.5f,  0.5f, 1.0f, 0.0f,
-     0.5f,  0.5f,  0.5f, 1.0f, 1.0f,
-     0.5f,  0.5f,  0.5f, 1.0f, 1.0f,
-    -0.5f,  0.5f,  0.5f, 0.0f, 1.0f,
-    -0.5f, -0.5f,  0.5f, 0.0f, 0.0f,
+        -0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f, 0.0f, 0.0f,
+         0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f, 1.0f, 0.0f,
+         0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f, 1.0f, 1.0f,
+         0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f, 1.0f, 1.0f,
+        -0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f, 0.0f, 1.0f,
+        -0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f, 0.0f, 0.0f,
 
-    -0.5f,  0.5f,  0.5f, 1.0f, 0.0f,
-    -0.5f,  0.5f, -0.5f, 1.0f, 1.0f,
-    -0.5f, -0.5f, -0.5f, 0.0f, 1.0f,
-    -0.5f, -0.5f, -0.5f, 0.0f, 1.0f,
-    -0.5f, -0.5f,  0.5f, 0.0f, 0.0f,
-    -0.5f,  0.5f,  0.5f, 1.0f, 0.0f,
-     0.5f,  0.5f,  0.5f, 1.0f, 0.0f,
-     0.5f,  0.5f, -0.5f, 1.0f, 1.0f,
-     0.5f, -0.5f, -0.5f, 0.0f, 1.0f,
-     0.5f, -0.5f, -0.5f, 0.0f, 1.0f,
-     0.5f, -0.5f,  0.5f, 0.0f, 0.0f,
-     0.5f,  0.5f,  0.5f, 1.0f, 0.0f,
+        -0.5f, -0.5f,  0.5f,  0.0f,  0.0f,  1.0f, 0.0f, 0.0f,
+         0.5f, -0.5f,  0.5f,  0.0f,  0.0f,  1.0f, 1.0f, 0.0f,
+         0.5f,  0.5f,  0.5f,  0.0f,  0.0f,  1.0f, 1.0f, 1.0f,
+         0.5f,  0.5f,  0.5f,  0.0f,  0.0f,  1.0f, 1.0f, 1.0f,
+        -0.5f,  0.5f,  0.5f,  0.0f,  0.0f,  1.0f, 0.0f, 1.0f,
+        -0.5f, -0.5f,  0.5f,  0.0f,  0.0f,  1.0f, 0.0f, 0.0f,
 
-    -0.5f, -0.5f, -0.5f, 0.0f, 1.0f,
-     0.5f, -0.5f, -0.5f, 1.0f, 1.0f,
-     0.5f, -0.5f,  0.5f, 1.0f, 0.0f,
-     0.5f, -0.5f,  0.5f, 1.0f, 0.0f,
-    -0.5f, -0.5f,  0.5f, 0.0f, 0.0f,
-    -0.5f, -0.5f, -0.5f, 0.0f, 1.0f,
-    -0.5f,  0.5f, -0.5f, 0.0f, 1.0f,
-     0.5f,  0.5f, -0.5f, 1.0f, 1.0f,
-     0.5f,  0.5f,  0.5f, 1.0f, 0.0f,
-     0.5f,  0.5f,  0.5f, 1.0f, 0.0f,
-    -0.5f,  0.5f,  0.5f, 0.0f, 0.0f,
-    -0.5f,  0.5f, -0.5f, 0.0f, 1.0f
+        -0.5f,  0.5f,  0.5f, -1.0f,  0.0f,  0.0f, 1.0f, 0.0f,
+        -0.5f,  0.5f, -0.5f, -1.0f,  0.0f,  0.0f, 1.0f, 1.0f,
+        -0.5f, -0.5f, -0.5f, -1.0f,  0.0f,  0.0f, 0.0f, 1.0f,
+        -0.5f, -0.5f, -0.5f, -1.0f,  0.0f,  0.0f, 0.0f, 1.0f,
+        -0.5f, -0.5f,  0.5f, -1.0f,  0.0f,  0.0f, 0.0f, 0.0f,
+        -0.5f,  0.5f,  0.5f, -1.0f,  0.0f,  0.0f, 1.0f, 0.0f,
+
+         0.5f,  0.5f,  0.5f,  1.0f,  0.0f,  0.0f, 1.0f, 0.0f,
+         0.5f,  0.5f, -0.5f,  1.0f,  0.0f,  0.0f, 1.0f, 1.0f,
+         0.5f, -0.5f, -0.5f,  1.0f,  0.0f,  0.0f, 0.0f, 1.0f,
+         0.5f, -0.5f, -0.5f,  1.0f,  0.0f,  0.0f, 0.0f, 1.0f,
+         0.5f, -0.5f,  0.5f,  1.0f,  0.0f,  0.0f, 0.0f, 0.0f,
+         0.5f,  0.5f,  0.5f,  1.0f,  0.0f,  0.0f, 1.0f, 0.0f,
+
+        -0.5f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f, 0.0f, 1.0f,
+         0.5f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f, 1.0f, 1.0f,
+         0.5f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f, 1.0f, 0.0f,
+         0.5f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f, 1.0f, 0.0f,
+        -0.5f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f, 0.0f, 0.0f,
+        -0.5f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f, 0.0f, 1.0f,
+
+        -0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f, 0.0f, 1.0f,
+         0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f, 1.0f, 1.0f,
+         0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f, 1.0f, 0.0f,
+         0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f, 1.0f, 0.0f,
+        -0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f, 0.0f, 0.0f,
+        -0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f, 0.0f, 1.0f
     };
     glGenVertexArrays(1, &VAO);
     glGenBuffers(1, &VBO);
@@ -99,14 +112,17 @@ void LightColorDemo::Initialize() {
     glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
 
     // position attribute
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
-    // color attribute
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
+    
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(3 * sizeof(float)));
     glEnableVertexAttribArray(1);
+    // color attribute
+    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(6 * sizeof(float)));
+    glEnableVertexAttribArray(2);
 
-    // 你的顶点数据和缓冲区设置
-    // ...
+    // 初始化轨道相机
+    updateOrbitCamera();
 }
 
 void LightColorDemo::Update(float deltaTime) {
@@ -116,11 +132,16 @@ void LightColorDemo::Update(float deltaTime) {
 
 void LightColorDemo::Render() {
 
-    float aspectRatio = 1200.0f / 800.0f;
-    // 创建变换矩阵
-    glm::mat4 transform = glm::mat4(1.0f);
-    // 先应用纵横比修正
-    transform = glm::scale(transform, glm::vec3(1.0f / aspectRatio, 1.0f, 1.0f));
+    // 动态获取当前窗口大小
+    int width, height;
+    glfwGetFramebufferSize(glfwGetCurrentContext(), &width, &height);
+    // 计算动态宽高比
+    float aspectRatio = (width > 0 && height > 0) ? (float)width / (float)height : 1.0f;
+
+    //// 创建变换矩阵
+    //glm::mat4 transform = glm::mat4(1.0f);
+    //// 先应用纵横比修正
+    //transform = glm::scale(transform, glm::vec3(1.0f / aspectRatio, 1.0f, 1.0f));
 
     shader->use();
     glEnable(GL_DEPTH_TEST);
@@ -177,22 +198,27 @@ void LightColorDemo::RenderImGui() {
 
     ImGui::Begin("Transform Demo Controls");
 
-    // 变换控制
-    ImGui::Text("Transform Controls:");
+    // 轨道相机控制
+    ImGui::Text("Orbit Camera Controls:");
     ImGui::Separator();
 
-    // x rotate angle
-    ImGui::SliderFloat("model angle", &model_angle_, -180.0f, 180.0f);
-    // scene move
-    ImGui::SliderFloat("z offset", &zoffset_, -10.0f, 10.0f);
-    // perspective angle
-    ImGui::SliderFloat("fov", &fovy_, 1.0f, 90.0f);
+    ImGui::SliderFloat("Orbit Radius", &orbit_radius_, 1.0f, 10.0f);
+    ImGui::SliderFloat("Orbit Yaw", &orbit_yaw_, -180.0f, 180.0f);
+    ImGui::SliderFloat("Orbit Pitch", &orbit_pitch_, -89.0f, 89.0f);
+    ImGui::SliderFloat3("Target Position", &orbit_target_.x, -5.0f, 5.0f);
 
-    ImGui::SliderFloat("camera speed", &camera_speed_, 0.01f, 10.0f);
-    ImGui::SliderFloat("mouse sensitive", &mouse_sens_, 0.01f, 10.0f);
-    ImGui::SliderFloat("scroll sensitive", &scroll_sensitivity_, 0.01f, 10.0f);
-    ImGui::SliderFloat("yaw", &yaw_, -89.0f, 89.0f);
-    ImGui::SliderFloat("pitch", &pitch_, -89.0f, 89.0f);
+    // 相机设置
+    ImGui::Text("Camera Settings:");
+    ImGui::SliderFloat("Mouse Sensitivity", &mouse_sens_, 10.0f, 200.0f);
+    ImGui::SliderFloat("Scroll Sensitivity", &scroll_sensitivity_, 0.1f, 2.0f);
+    ImGui::SliderFloat("Move Speed", &camera_speed_, 0.5f, 10.0f);
+
+    // 变换控制
+    ImGui::Separator();
+    ImGui::Text("Model Controls:");
+
+    ImGui::SliderFloat("Model Angle", &model_angle_, -180.0f, 180.0f);
+    ImGui::SliderFloat("FOV", &fovy_, 1.0f, 90.0f);
 
     ImGui::Checkbox("Auto Rotate", &auto_rotate_);
     if (auto_rotate_) {
@@ -223,43 +249,37 @@ void LightColorDemo::Cleanup() {
 
 void LightColorDemo::ProcInput(GLFWwindow* window, float deltaTime)
 {
-    float cameraSpeed = camera_speed_ * deltaTime; // adjust accordingly
-    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
-        cameraPos += cameraSpeed * cameraFront;
-    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
-        cameraPos -= cameraSpeed * cameraFront;
-    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
-        cameraPos -= glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
-    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
-        cameraPos += glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
-
+    // 鼠标左键拖拽旋转
     if (MouseManager::Get().IsLeftButtonPressed()) {
-
         glm::vec2 mouse_delta = MouseManager::Get().GetMouseDelta();
 
-        mouse_delta.x *= mouse_sens_;
-        mouse_delta.y *= mouse_sens_;
-
-        yaw_ += mouse_delta.x * deltaTime;
-        pitch_ += mouse_delta.y * deltaTime;
-
-        if (pitch_ > 89.0f)
-            pitch_ = 89.0f;
-        if (pitch_ < -89.0f)
-            pitch_ = -89.0f;
-
-        glm::vec3 front;
-        front.x = cos(glm::radians(yaw_)) * cos(glm::radians(pitch_));
-        front.y = sin(glm::radians(pitch_));
-        front.z = sin(glm::radians(yaw_)) * cos(glm::radians(pitch_));
-        cameraFront = glm::normalize(front);
+        orbit_yaw_ += mouse_delta.x * mouse_sens_ * deltaTime;
+        orbit_pitch_ -= mouse_delta.y * mouse_sens_ * deltaTime;  // 注意这里是减号，让鼠标上移视角上移
     }
 
+    // 滚轮控制缩放
+    float scroll_delta = MouseManager::Get().GetScrollY();
+    if (abs(scroll_delta) > 0.001f) {
+        orbit_radius_ -= scroll_delta * scroll_sensitivity_;
+    }
 
-    if (fovy_ >= 1.0f && fovy_ <= 180.0f)
-        fovy_ -= MouseManager::Get().GetScrollY() * scroll_sensitivity_;
-    if (fovy_ <= 1.0f)
-        fovy_ = 1.0f;
+    // WASD 键移动目标点（可选功能）
+    float move_speed = camera_speed_ * deltaTime;
+    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+        orbit_target_.z -= move_speed;
+    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+        orbit_target_.z += move_speed;
+    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+        orbit_target_.x -= move_speed;
+    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+        orbit_target_.x += move_speed;
+    if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS)
+        orbit_target_.y -= move_speed;
+    if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS)
+        orbit_target_.y += move_speed;
+
+    // 更新相机位置
+    updateOrbitCamera();
 }
 
 std::string LightColorDemo::GetName() const {
@@ -339,4 +359,22 @@ unsigned int LightColorDemo::createSolidColorTexture(float r, float g, float b, 
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
     return textureID;
+}
+
+void LightColorDemo::updateOrbitCamera() {
+    // 限制垂直角度，避免翻转
+    if (orbit_pitch_ > 89.0f) orbit_pitch_ = 89.0f;
+    if (orbit_pitch_ < -89.0f) orbit_pitch_ = -89.0f;
+
+    // 限制距离
+    if (orbit_radius_ < 1.0f) orbit_radius_ = 1.0f;
+    if (orbit_radius_ > 10.0f) orbit_radius_ = 10.0f;
+
+    // 根据球坐标计算相机位置
+    float x = orbit_radius_ * cos(glm::radians(orbit_pitch_)) * cos(glm::radians(orbit_yaw_));
+    float y = orbit_radius_ * sin(glm::radians(orbit_pitch_));
+    float z = orbit_radius_ * cos(glm::radians(orbit_pitch_)) * sin(glm::radians(orbit_yaw_));
+
+    cameraPos = orbit_target_ + glm::vec3(x, y, z);
+    cameraFront = glm::normalize(orbit_target_ - cameraPos);
 }
