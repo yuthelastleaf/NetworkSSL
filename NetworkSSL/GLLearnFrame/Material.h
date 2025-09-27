@@ -2,7 +2,7 @@
 
 #include "demo.h"
 
-class LightColorDemo : public Demo {
+class MaterialDemo : public Demo {
 private:
     unsigned int VBO, VAO;
     unsigned int lightVBO, lightVAO;
@@ -39,7 +39,7 @@ private:
     float orbit_pitch_ = 0.0f;            // 垂直角度
     glm::vec3 orbit_target_ = glm::vec3(0.0f, 0.0f, 0.0f);  // 观察目标点
 
-    float model_angle_ = -55.0f;
+    float model_angle_ = 0.0f;
     float zoffset_ = -3.0f;
     float fovy_ = 45.0f;
 
@@ -62,5 +62,22 @@ private:
     float specular_strength_ = 0.5;
 
     bool use_gouraud_ = false;              // 切换标志
+
+    // 材质参数
+    glm::vec3 material_ambient_ = glm::vec3(0.1f, 0.1f, 0.1f);
+    glm::vec3 material_diffuse_ = glm::vec3(0.8f, 0.8f, 0.8f);
+    glm::vec3 material_specular_ = glm::vec3(1.0f, 1.0f, 1.0f);
+    float material_shininess_ = 32.0f;
+
+    // 光源参数
+    glm::vec3 light_ambient_ = glm::vec3(0.2f, 0.2f, 0.2f);
+    glm::vec3 light_diffuse_ = glm::vec3(0.8f, 0.8f, 0.8f);
+    glm::vec3 light_specular_ = glm::vec3(1.0f, 1.0f, 1.0f);
+    glm::vec3 light_color_ = glm::vec3(1.0f, 1.0f, 1.0f);  // 整体光照颜色
+
+    bool use_texture_material_ = false;  // 材质贴图开关
+    unsigned int diffuseMap_;             // 漫反射贴图
+    unsigned int specularMap_;            // 镜面反射贴图
+
 };
 

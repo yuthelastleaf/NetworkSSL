@@ -12,6 +12,7 @@
 #include "camera.h"
 #include "MouseMng.h"
 #include "LightColor.h"
+#include "Material.h"
 
 bool OpenGLApp::Initialize() {
     // GLFW ≥ı ºªØ
@@ -53,6 +54,7 @@ bool OpenGLApp::Initialize() {
     demoManager.RegisterDemo("in3d", std::make_unique<in3dDemo>());
     demoManager.RegisterDemo("CameraDemo", std::make_unique<CameraDemo>());
     demoManager.RegisterDemo("LightColorDemo", std::make_unique<LightColorDemo>());
+    demoManager.RegisterDemo("MaterialDemo", std::make_unique<MaterialDemo>());
 
     std::cout << "OpenGL Learning Framework initialized successfully!" << std::endl;
     return true;

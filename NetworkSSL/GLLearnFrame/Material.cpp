@@ -1,14 +1,14 @@
-ï»¿#include <glad/glad.h>
+#include <glad/glad.h>
 #include <imgui.h>
 #include <iostream>
-#include "LightColor.h"
+#include "Material.h"
 #include <GLFW/glfw3.h>
 
 #include "stb_image.h"
 #include "MouseMng.h"
 
-void LightColorDemo::Initialize() {
-    // ç€è‰²å™¨ä»£ç 
+void MaterialDemo::Initialize() {
+    // ×ÅÉ«Æ÷´úÂë
     const char* vertexShaderSource = "#version 330 core\n"
         "layout (location = 0) in vec3 aPos;\n"
         "layout (location = 1) in vec3 aNormal;\n"
@@ -28,6 +28,18 @@ void LightColorDemo::Initialize() {
         "}\0";
 
     const char* fragmentShaderSource = "#version 330 core\n"
+        "struct Material {\n"
+        "vec3 ambient;\n"
+        "vec3 diffuse;\n"
+        "vec3 specular;\n"
+        "float shininess;\n"
+        "};\n"
+        "struct Light {\n"
+        "vec3 position;\n"
+        "vec3 ambient;\n"
+        "vec3 diffuse;\n"
+        "vec3 specular;\n"
+        "};\n"
         "out vec4 FragColor;\n"
         "in vec2 TexCoord;\n"
         "in vec3 Normal;\n"
@@ -38,6 +50,8 @@ void LightColorDemo::Initialize() {
         "uniform vec3 viewPos;\n"
         "uniform float ambientstrength;\n"
         "uniform float specularstrength;\n"
+        "uniform Material material;\n"
+        "uniform Light light;\n"
         "void main()\n"
         "{\n"
         "   vec3 norm = normalize(Normal);\n"
@@ -45,10 +59,10 @@ void LightColorDemo::Initialize() {
         "   vec3 viewDir = normalize(viewPos - FragPos);\n"
         "   vec3 reflectDir = reflect(-lightDir, norm);\n"
         "   float diff = max(dot(norm, lightDir), 0.0);\n"
-        "   vec3 ambient = ambientstrength * lightColor;\n"
-        "   vec3 diffuse = diff * lightColor;\n"
-        "   float spec = pow(max(dot(viewDir, reflectDir), 0.0), 32);\n"
-        "   vec3 specular = specularstrength * spec * lightColor;\n"
+        "   vec3 ambient = light.ambient * ambientstrength * lightColor * material.ambient;\n"
+        "   vec3 diffuse = light.diffuse * (diff * material.diffuse) * lightColor;\n"
+        "   float spec = pow(max(dot(viewDir, reflectDir), 0.0), material.shininess);\n"
+        "   vec3 specular = specularstrength * light.specular * spec * material.specular * lightColor;\n"
         "   FragColor = texture(texture1, TexCoord) * vec4(ambient + diffuse + specular, 1.0);\n"
         "}\0";
 
@@ -70,7 +84,7 @@ void LightColorDemo::Initialize() {
         "   FragColor = vec4(lightColor, 1.0); // set all 4 vector values to 1.0\n"
         "}\0";
 
-    // gouraud ç€è‰²å™¨å®šä¹‰
+    // gouraud ×ÅÉ«Æ÷¶¨Òå
     const char* gouraudVertexShaderSource = "#version 330 core\n"
         "layout (location = 0) in vec3 aPos;\n"
         "layout (location = 1) in vec3 aNormal;\n"
@@ -84,7 +98,7 @@ void LightColorDemo::Initialize() {
         "uniform float ambientstrength;\n"
         "uniform float specularstrength;\n"
         "out vec2 TexCoord;\n"
-        "out vec3 LightingColor;\n"  // è¾“å‡ºè®¡ç®—å¥½çš„å…‰ç…§é¢œè‰²
+        "out vec3 LightingColor;\n"  // Êä³ö¼ÆËãºÃµÄ¹âÕÕÑÕÉ«
         "void main()\n"
         "{\n"
         "   gl_Position = projection * view * model * vec4(aPos, 1.0);\n"
@@ -92,20 +106,20 @@ void LightColorDemo::Initialize() {
         "   vec3 Normal = mat3(transpose(inverse(model))) * aNormal;\n"
         "   TexCoord = aTexCoord;\n"
         "   \n"
-        "   // åœ¨é¡¶ç‚¹ç€è‰²å™¨ä¸­è®¡ç®—å…‰ç…§\n"
+        "   // ÔÚ¶¥µã×ÅÉ«Æ÷ÖĞ¼ÆËã¹âÕÕ\n"
         "   vec3 norm = normalize(Normal);\n"
         "   vec3 lightDir = normalize(lightPos - FragPos);\n"
         "   vec3 viewDir = normalize(viewPos - FragPos);\n"
         "   vec3 reflectDir = reflect(-lightDir, norm);\n"
         "   \n"
-        "   // ç¯å¢ƒå…‰\n"
+        "   // »·¾³¹â\n"
         "   vec3 ambient = ambientstrength * lightColor;\n"
         "   \n"
-        "   // æ¼«åå°„\n"
+        "   // Âş·´Éä\n"
         "   float diff = max(dot(norm, lightDir), 0.0);\n"
         "   vec3 diffuse = diff * lightColor;\n"
         "   \n"
-        "   // é•œé¢åå°„\n"
+        "   // ¾µÃæ·´Éä\n"
         "   float spec = pow(max(dot(viewDir, reflectDir), 0.0), 32);\n"
         "   vec3 specular = specularstrength * spec * lightColor;\n"
         "   \n"
@@ -115,7 +129,7 @@ void LightColorDemo::Initialize() {
     const char* gouraudFragmentShaderSource = "#version 330 core\n"
         "out vec4 FragColor;\n"
         "in vec2 TexCoord;\n"
-        "in vec3 LightingColor;\n"  // æ¥æ”¶æ’å€¼åçš„å…‰ç…§é¢œè‰²
+        "in vec3 LightingColor;\n"  // ½ÓÊÕ²åÖµºóµÄ¹âÕÕÑÕÉ«
         "uniform sampler2D texture1;\n"
         "void main()\n"
         "{\n"
@@ -128,18 +142,18 @@ void LightColorDemo::Initialize() {
 
     createBasicTextures();
 
-    // åˆ›å»ºå„ç§é¢œè‰²çš„çº¯è‰²çº¹ç†
+    // ´´½¨¸÷ÖÖÑÕÉ«µÄ´¿É«ÎÆÀí
     whiteTexture = createSolidColorTexture(1.0f, 1.0f, 1.0f, 1.0f);
     redTexture = createSolidColorTexture(1.0f, 0.0f, 0.0f, 1.0f);
     greenTexture = createSolidColorTexture(0.0f, 1.0f, 0.0f, 1.0f);
     blueTexture = createSolidColorTexture(0.0f, 0.0f, 1.0f, 1.0f);
 
     //float vertices[] = {
-    //    //     ---- ä½ç½® ----       ---- é¢œè‰² ----     - çº¹ç†åæ ‡ -
-    //         0.5f,  0.5f, 0.0f,   1.0f, 0.0f, 0.0f,   1.0f, 1.0f,   // å³ä¸Š
-    //         0.5f, -0.5f, 0.0f,   0.0f, 1.0f, 0.0f,   1.0f, 0.0f,   // å³ä¸‹
-    //        -0.5f, -0.5f, 0.0f,   0.0f, 0.0f, 1.0f,   0.0f, 0.0f,   // å·¦ä¸‹
-    //        -0.5f,  0.5f, 0.0f,   1.0f, 1.0f, 0.0f,   0.0f, 1.0f    // å·¦ä¸Š
+    //    //     ---- Î»ÖÃ ----       ---- ÑÕÉ« ----     - ÎÆÀí×ø±ê -
+    //         0.5f,  0.5f, 0.0f,   1.0f, 0.0f, 0.0f,   1.0f, 1.0f,   // ÓÒÉÏ
+    //         0.5f, -0.5f, 0.0f,   0.0f, 1.0f, 0.0f,   1.0f, 0.0f,   // ÓÒÏÂ
+    //        -0.5f, -0.5f, 0.0f,   0.0f, 0.0f, 1.0f,   0.0f, 0.0f,   // ×óÏÂ
+    //        -0.5f,  0.5f, 0.0f,   1.0f, 1.0f, 0.0f,   0.0f, 1.0f    // ×óÉÏ
     //};
 
     float vertices[] = {
@@ -196,7 +210,7 @@ void LightColorDemo::Initialize() {
     // position attribute
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
-    
+
     glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(3 * sizeof(float)));
     glEnableVertexAttribArray(1);
     // color attribute
@@ -211,26 +225,26 @@ void LightColorDemo::Initialize() {
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
 
-    // åˆå§‹åŒ–è½¨é“ç›¸æœº
+    // ³õÊ¼»¯¹ìµÀÏà»ú
     updateOrbitCamera();
 }
 
-void LightColorDemo::Update(float deltaTime) {
+void MaterialDemo::Update(float deltaTime) {
 
 
 }
 
-void LightColorDemo::Render() {
+void MaterialDemo::Render() {
 
-    // åŠ¨æ€è·å–å½“å‰çª—å£å¤§å°
+    // ¶¯Ì¬»ñÈ¡µ±Ç°´°¿Ú´óĞ¡
     int width, height;
     glfwGetFramebufferSize(glfwGetCurrentContext(), &width, &height);
-    // è®¡ç®—åŠ¨æ€å®½é«˜æ¯”
+    // ¼ÆËã¶¯Ì¬¿í¸ß±È
     float aspectRatio = (width > 0 && height > 0) ? (float)width / (float)height : 1.0f;
 
-    //// åˆ›å»ºå˜æ¢çŸ©é˜µ
+    //// ´´½¨±ä»»¾ØÕó
     //glm::mat4 transform = glm::mat4(1.0f);
-    //// å…ˆåº”ç”¨çºµæ¨ªæ¯”ä¿®æ­£
+    //// ÏÈÓ¦ÓÃ×İºá±ÈĞŞÕı
     //transform = glm::scale(transform, glm::vec3(1.0f / aspectRatio, 1.0f, 1.0f));
 
     if (!use_gouraud_) {
@@ -249,14 +263,14 @@ void LightColorDemo::Render() {
         model = glm::rotate(model, rotate_speed_ * (float)glfwGetTime() * glm::radians(model_angle_), glm::vec3(0.5f, 1.0f, 0.0f));
     }
     //glm::mat4 view = glm::mat4(1.0f);
-    //// æ³¨æ„ï¼Œæˆ‘ä»¬å°†çŸ©é˜µå‘æˆ‘ä»¬è¦è¿›è¡Œç§»åŠ¨åœºæ™¯çš„åæ–¹å‘ç§»åŠ¨ã€‚
+    //// ×¢Òâ£¬ÎÒÃÇ½«¾ØÕóÏòÎÒÃÇÒª½øĞĞÒÆ¶¯³¡¾°µÄ·´·½ÏòÒÆ¶¯¡£
     // glm::mat4 view = view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
     glm::mat4 view = glm::lookAt(cameraPos, orbit_target_, cameraUp);
 
     glm::mat4 projection = glm::mat4(1.0f);
     projection = glm::perspective(glm::radians(fovy_), aspectRatio, 0.1f, 100.0f);
 
-    // ä½ ç¼ºå°‘äº†è¿™ä¸¤ä¸ªå…³é”®çš„uniformï¼
+    // ÄãÈ±ÉÙÁËÕâÁ½¸ö¹Ø¼üµÄuniform£¡
     glm::vec3 lightPos(1.2f, 1.0f, 2.0f);
     shader->setVec3("lightPos", 1.2f, 1.0f, 2.0f);
     shader->setFloat("ambientstrength", ambient_strength_);
@@ -265,9 +279,18 @@ void LightColorDemo::Render() {
     shader->setMat4("model", model);
     shader->setMat4("view", view);
     shader->setMat4("projection", projection);
-    shader->setVec3("lightColor", 1.0f, 1.0f, 1.0f); // æ­£å¸¸ç™½å…‰
+    shader->setVec3("lightColor", light_color_.x, light_color_.y, light_color_.z); // Õı³£°×¹â
 
-    // æ¸²æŸ“ä»£ç 
+    shader->setVec3("material.ambient", material_ambient_.x, material_ambient_.y, material_ambient_.z);
+    shader->setVec3("material.diffuse", material_diffuse_.x, material_diffuse_.y, material_diffuse_.z);
+    shader->setVec3("material.specular", material_specular_.x, material_specular_.y, material_specular_.z);
+    shader->setFloat("material.shininess", material_shininess_);
+
+    shader->setVec3("light.ambient", material_ambient_.x, material_ambient_.y, material_ambient_.z);
+    shader->setVec3("light.diffuse", light_diffuse_.x, light_diffuse_.y, light_diffuse_.z);
+    shader->setVec3("light.specular", light_specular_.x, light_specular_.y, light_specular_.z);
+
+    // äÖÈ¾´úÂë
     // bind Texture
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, texture1);
@@ -282,7 +305,7 @@ void LightColorDemo::Render() {
     light_shader->use();
     glm::mat4 light_model = glm::mat4(1.0f);
     light_model = glm::translate(light_model, lightPos);
-    light_model = glm::scale(light_model, glm::vec3(0.2f)); // ç¼©å°å…‰æº
+    light_model = glm::scale(light_model, glm::vec3(0.2f)); // ËõĞ¡¹âÔ´
     light_shader->setMat4("model", light_model);
     light_shader->setMat4("view", view);
     light_shader->setMat4("projection", projection);
@@ -293,14 +316,14 @@ void LightColorDemo::Render() {
     // glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 }
 
-void LightColorDemo::RenderImGui() {
+void MaterialDemo::RenderImGui() {
     static float mixValue = 0.2f;
     static int wrapMode = 0;
     static bool useNearest = true;
 
     ImGui::Begin("Transform Demo Controls");
 
-    // è½¨é“ç›¸æœºæ§åˆ¶
+    // ¹ìµÀÏà»ú¿ØÖÆ
     ImGui::Text("Orbit Camera Controls:");
     ImGui::Separator();
 
@@ -309,13 +332,13 @@ void LightColorDemo::RenderImGui() {
     ImGui::SliderFloat("Orbit Pitch", &orbit_pitch_, -89.0f, 89.0f);
     ImGui::SliderFloat3("Target Position", &orbit_target_.x, -5.0f, 5.0f);
 
-    // ç›¸æœºè®¾ç½®
+    // Ïà»úÉèÖÃ
     ImGui::Text("Camera Settings:");
     ImGui::SliderFloat("Mouse Sensitivity", &mouse_sens_, 10.0f, 200.0f);
     ImGui::SliderFloat("Scroll Sensitivity", &scroll_sensitivity_, 0.1f, 2.0f);
     ImGui::SliderFloat("Move Speed", &camera_speed_, 0.5f, 10.0f);
 
-    // å…‰ç…§è®¾ç½®
+    // ¹âÕÕÉèÖÃ
     ImGui::Text("Light Settings:");
     ImGui::SliderFloat("Ambient Strength_", &ambient_strength_, 0.1f, 10.0f);
     ImGui::SliderFloat("Specular Strength_", &specular_strength_, 0.1f, 128.0f);
@@ -328,7 +351,86 @@ void LightColorDemo::RenderImGui() {
         use_gouraud_ = true;
     }
 
-    // å˜æ¢æ§åˆ¶
+    // ²ÄÖÊÉèÖÃ
+    ImGui::Text("Material Properties:");
+    ImGui::Separator();
+
+    ImGui::ColorEdit3("Material Ambient", &material_ambient_.x);
+    ImGui::ColorEdit3("Material Diffuse", &material_diffuse_.x);
+    ImGui::ColorEdit3("Material Specular", &material_specular_.x);
+    ImGui::SliderFloat("Material Shininess", &material_shininess_, 1.0f, 256.0f);
+
+    // ²ÄÖÊÔ¤Éè
+    ImGui::Text("Material Presets:");
+    if (ImGui::Button("Gold")) {
+        material_ambient_ = glm::vec3(0.24725f, 0.1995f, 0.0745f);
+        material_diffuse_ = glm::vec3(0.75164f, 0.60648f, 0.22648f);
+        material_specular_ = glm::vec3(0.628281f, 0.555802f, 0.366065f);
+        material_shininess_ = 51.2f;
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Silver")) {
+        material_ambient_ = glm::vec3(0.19225f, 0.19225f, 0.19225f);
+        material_diffuse_ = glm::vec3(0.50754f, 0.50754f, 0.50754f);
+        material_specular_ = glm::vec3(0.508273f, 0.508273f, 0.508273f);
+        material_shininess_ = 51.2f;
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Emerald")) {
+        material_ambient_ = glm::vec3(0.0215f, 0.1745f, 0.0215f);
+        material_diffuse_ = glm::vec3(0.07568f, 0.61424f, 0.07568f);
+        material_specular_ = glm::vec3(0.633f, 0.727811f, 0.633f);
+        material_shininess_ = 76.8f;
+    }
+    if (ImGui::Button("Red Plastic")) {
+        material_ambient_ = glm::vec3(0.0f, 0.0f, 0.0f);
+        material_diffuse_ = glm::vec3(0.5f, 0.0f, 0.0f);
+        material_specular_ = glm::vec3(0.7f, 0.6f, 0.6f);
+        material_shininess_ = 32.0f;
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Rubber")) {
+        material_ambient_ = glm::vec3(0.02f, 0.02f, 0.02f);
+        material_diffuse_ = glm::vec3(0.01f, 0.01f, 0.01f);
+        material_specular_ = glm::vec3(0.4f, 0.4f, 0.4f);
+        material_shininess_ = 10.0f;
+    }
+
+    ImGui::Separator();
+
+    // ¹âÔ´ÉèÖÃ
+    ImGui::Text("Light Properties:");
+    ImGui::Separator();
+
+    ImGui::ColorEdit3("Light Color", &light_color_.x);
+    ImGui::ColorEdit3("Light Ambient", &light_ambient_.x);
+    ImGui::ColorEdit3("Light Diffuse", &light_diffuse_.x);
+    ImGui::ColorEdit3("Light Specular", &light_specular_.x);
+
+    // ¹âÔ´Ô¤Éè
+    ImGui::Text("Light Presets:");
+    if (ImGui::Button("Daylight")) {
+        light_color_ = glm::vec3(1.0f, 1.0f, 0.9f);
+        light_ambient_ = glm::vec3(0.3f, 0.3f, 0.3f);
+        light_diffuse_ = glm::vec3(0.8f, 0.8f, 0.7f);
+        light_specular_ = glm::vec3(1.0f, 1.0f, 0.9f);
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Sunset")) {
+        light_color_ = glm::vec3(1.0f, 0.6f, 0.3f);
+        light_ambient_ = glm::vec3(0.2f, 0.1f, 0.05f);
+        light_diffuse_ = glm::vec3(0.8f, 0.5f, 0.2f);
+        light_specular_ = glm::vec3(1.0f, 0.6f, 0.3f);
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Cool White")) {
+        light_color_ = glm::vec3(0.9f, 0.95f, 1.0f);
+        light_ambient_ = glm::vec3(0.2f, 0.2f, 0.3f);
+        light_diffuse_ = glm::vec3(0.7f, 0.8f, 1.0f);
+        light_specular_ = glm::vec3(0.9f, 0.95f, 1.0f);
+    }
+
+    // ±ä»»¿ØÖÆ
     ImGui::Separator();
     ImGui::Text("Model Controls:");
 
@@ -343,13 +445,13 @@ void LightColorDemo::RenderImGui() {
     ImGui::Separator();
     ImGui::Text("Texture Controls:");
 
-    // åŸæœ‰çš„çº¹ç†æ§åˆ¶
+    // Ô­ÓĞµÄÎÆÀí¿ØÖÆ
     ImGui::SliderFloat("Mix Value", &mixValue, 0.0f, 1.0f);
     const char* wrapModes[] = { "REPEAT", "MIRRORED_REPEAT", "CLAMP_TO_EDGE", "CLAMP_TO_BORDER" };
     ImGui::Combo("Wrap Mode", &wrapMode, wrapModes, 4);
     ImGui::Checkbox("Use GL_NEAREST", &useNearest);
 
-    // åº”ç”¨è®¾ç½®
+    // Ó¦ÓÃÉèÖÃ
     applyTextureSettings(texture2, wrapMode, useNearest);
     shader->use();
     shader->setFloat("mixValue", mixValue);
@@ -357,28 +459,28 @@ void LightColorDemo::RenderImGui() {
     ImGui::End();
 }
 
-void LightColorDemo::Cleanup() {
-    // æ¸…ç†èµ„æº
+void MaterialDemo::Cleanup() {
+    // ÇåÀí×ÊÔ´
     shader.reset();
 }
 
-void LightColorDemo::ProcInput(GLFWwindow* window, float deltaTime)
+void MaterialDemo::ProcInput(GLFWwindow* window, float deltaTime)
 {
-    // é¼ æ ‡å·¦é”®æ‹–æ‹½æ—‹è½¬
+    // Êó±ê×ó¼üÍÏ×§Ğı×ª
     if (MouseManager::Get().IsLeftButtonPressed()) {
         glm::vec2 mouse_delta = MouseManager::Get().GetMouseDelta();
 
         orbit_yaw_ += mouse_delta.x * mouse_sens_ * deltaTime;
-        orbit_pitch_ -= mouse_delta.y * mouse_sens_ * deltaTime;  // æ³¨æ„è¿™é‡Œæ˜¯å‡å·ï¼Œè®©é¼ æ ‡ä¸Šç§»è§†è§’ä¸Šç§»
+        orbit_pitch_ -= mouse_delta.y * mouse_sens_ * deltaTime;  // ×¢ÒâÕâÀïÊÇ¼õºÅ£¬ÈÃÊó±êÉÏÒÆÊÓ½ÇÉÏÒÆ
     }
 
-    // æ»šè½®æ§åˆ¶ç¼©æ”¾
+    // ¹öÂÖ¿ØÖÆËõ·Å
     float scroll_delta = MouseManager::Get().GetScrollY();
     if (abs(scroll_delta) > 0.001f) {
         orbit_radius_ -= scroll_delta * scroll_sensitivity_;
     }
 
-    // WASD é”®ç§»åŠ¨ç›®æ ‡ç‚¹ï¼ˆå¯é€‰åŠŸèƒ½ï¼‰
+    // WASD ¼üÒÆ¶¯Ä¿±êµã£¨¿ÉÑ¡¹¦ÄÜ£©
     float move_speed = camera_speed_ * deltaTime;
     if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
         orbit_target_.z -= move_speed;
@@ -393,15 +495,15 @@ void LightColorDemo::ProcInput(GLFWwindow* window, float deltaTime)
     if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS)
         orbit_target_.y += move_speed;
 
-    // æ›´æ–°ç›¸æœºä½ç½®
+    // ¸üĞÂÏà»úÎ»ÖÃ
     updateOrbitCamera();
 }
 
-std::string LightColorDemo::GetName() const {
+std::string MaterialDemo::GetName() const {
     return "Camera Demo";
 }
 
-void LightColorDemo::createBasicTextures()
+void MaterialDemo::createBasicTextures()
 {
     glGenTextures(1, &texture1);
     glBindTexture(GL_TEXTURE_2D, texture1);
@@ -412,13 +514,14 @@ void LightColorDemo::createBasicTextures()
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
     int width, height, nrChannels;
-    // éœ€è¦å…ˆä¸‹è½½container.jpgå“¦ï¼Œåœ°å€æ˜¯ https://learnopengl-cn.github.io/img/01/06/container.jpg 
-    // å¦å¤–ä¸€ä¸ªç¬‘è„¸ä¸‹è½½åœ°å€ï¼šhttps://learnopengl-cn.github.io/img/01/06/awesomeface.png
-    unsigned char* data = stbi_load("container.jpg", &width, &height, &nrChannels, 0);
+    // ĞèÒªÏÈÏÂÔØcontainer.jpgÅ¶£¬µØÖ·ÊÇ https://learnopengl-cn.github.io/img/01/06/container.jpg 
+    // ÁíÍâÒ»¸öĞ¦Á³ÏÂÔØµØÖ·£ºhttps://learnopengl-cn.github.io/img/01/06/awesomeface.png
+    // unsigned char* data = stbi_load("container.jpg", &width, &height, &nrChannels, 0);
+    unsigned char* data = stbi_load("container2_specular.png", &width, &height, &nrChannels, 0);
 
     if (data)
     {
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
         glGenerateMipmap(GL_TEXTURE_2D);
     }
     else
@@ -433,7 +536,7 @@ void LightColorDemo::createBasicTextures()
 
 }
 
-void LightColorDemo::applyTextureSettings(unsigned int textureID, int wrapMode, bool useNearest) {
+void MaterialDemo::applyTextureSettings(unsigned int textureID, int wrapMode, bool useNearest) {
     glBindTexture(GL_TEXTURE_2D, textureID);
 
     GLenum wrap;
@@ -453,12 +556,12 @@ void LightColorDemo::applyTextureSettings(unsigned int textureID, int wrapMode, 
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filter);
 }
 
-unsigned int LightColorDemo::createSolidColorTexture(float r, float g, float b, float a) {
+unsigned int MaterialDemo::createSolidColorTexture(float r, float g, float b, float a) {
     unsigned int textureID;
     glGenTextures(1, &textureID);
     glBindTexture(GL_TEXTURE_2D, textureID);
 
-    // å°†0-1çš„é¢œè‰²å€¼è½¬æ¢ä¸º0-255
+    // ½«0-1µÄÑÕÉ«Öµ×ª»»Îª0-255
     unsigned char colorData[] = {
         (unsigned char)(r * 255),
         (unsigned char)(g * 255),
@@ -476,16 +579,16 @@ unsigned int LightColorDemo::createSolidColorTexture(float r, float g, float b, 
     return textureID;
 }
 
-void LightColorDemo::updateOrbitCamera() {
-    // é™åˆ¶å‚ç›´è§’åº¦ï¼Œé¿å…ç¿»è½¬
+void MaterialDemo::updateOrbitCamera() {
+    // ÏŞÖÆ´¹Ö±½Ç¶È£¬±ÜÃâ·­×ª
     if (orbit_pitch_ > 89.0f) orbit_pitch_ = 89.0f;
     if (orbit_pitch_ < -89.0f) orbit_pitch_ = -89.0f;
 
-    // é™åˆ¶è·ç¦»
+    // ÏŞÖÆ¾àÀë
     if (orbit_radius_ < 1.0f) orbit_radius_ = 1.0f;
     if (orbit_radius_ > 10.0f) orbit_radius_ = 10.0f;
 
-    // æ ¹æ®çƒåæ ‡è®¡ç®—ç›¸æœºä½ç½®
+    // ¸ù¾İÇò×ø±ê¼ÆËãÏà»úÎ»ÖÃ
     float x = orbit_radius_ * cos(glm::radians(orbit_pitch_)) * cos(glm::radians(orbit_yaw_));
     float y = orbit_radius_ * sin(glm::radians(orbit_pitch_));
     float z = orbit_radius_ * cos(glm::radians(orbit_pitch_)) * sin(glm::radians(orbit_yaw_));

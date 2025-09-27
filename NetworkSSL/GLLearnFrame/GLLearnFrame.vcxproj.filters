@@ -37,6 +37,9 @@
     <Filter Include="Light">
       <UniqueIdentifier>{f99e9886-07ea-45e8-8918-66cdc112142c}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Material">
+      <UniqueIdentifier>{579c02e1-7559-4d32-b060-955cc2bcc1d8}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -72,6 +75,9 @@
     <ClCompile Include="LightColor.cpp">
       <Filter>Light</Filter>
     </ClCompile>
+    <ClCompile Include="Material.cpp">
+      <Filter>Material</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="shader.h">
@@ -100,6 +106,9 @@
     </ClInclude>
     <ClInclude Include="LightColor.h">
       <Filter>Light</Filter>
+    </ClInclude>
+    <ClInclude Include="Material.h">
+      <Filter>Material</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>
