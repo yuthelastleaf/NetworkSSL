@@ -7,6 +7,7 @@ private:
     unsigned int VBO, VAO;
     unsigned int lightVBO, lightVAO;
     std::unique_ptr<Shader> shader;
+    std::unique_ptr<Shader> texture_shader;
     std::unique_ptr<Shader> light_shader;
     std::unique_ptr<Shader> glight_shader;
     // 其他需要的变量
@@ -31,6 +32,7 @@ private:
     void updateOrbitCamera();
     void applyTextureSettings(unsigned int textureID, int wrapMode, bool useNearest);
     unsigned int createSolidColorTexture(float r, float g, float b, float a);
+    void createMaterialTextures();
 
 private:
     // 轨道相机参数
