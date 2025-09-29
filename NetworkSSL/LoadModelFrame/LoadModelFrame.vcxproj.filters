@@ -1,0 +1,111 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="源文件">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="头文件">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
+    </Filter>
+    <Filter Include="资源文件">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="base">
+      <UniqueIdentifier>{aea12f8e-eb16-4d2e-9c5e-39fd730ba291}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="base\Light">
+      <UniqueIdentifier>{5451029f-2458-482a-86fc-614ed859e8d2}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="base\camera">
+      <UniqueIdentifier>{014078d5-e11e-4639-8fc9-582ac15c664a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="base\model">
+      <UniqueIdentifier>{0e04d7d1-6008-4af7-b9a2-659e47df0b12}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="base\util">
+      <UniqueIdentifier>{f9020ce0-7adc-4ff1-8f06-1a6f0f2e0add}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Demo">
+      <UniqueIdentifier>{ca98b9dc-0831-4600-ac96-c4c6d094f9a2}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Demo\LightColor">
+      <UniqueIdentifier>{83fc6e0c-7e57-4273-95db-44fdf4bf0bc1}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="base\grid">
+      <UniqueIdentifier>{69d5e971-84bf-4ac5-84ec-f12caa559478}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="demo.h">
+      <Filter>base</Filter>
+    </ClInclude>
+    <ClInclude Include="Light.h">
+      <Filter>base\Light</Filter>
+    </ClInclude>
+    <ClInclude Include="Camera.h">
+      <Filter>base\camera</Filter>
+    </ClInclude>
+    <ClInclude Include="Model.h">
+      <Filter>base\model</Filter>
+    </ClInclude>
+    <ClInclude Include="utils.h">
+      <Filter>base\util</Filter>
+    </ClInclude>
+    <ClInclude Include="shader.h">
+      <Filter>base\util</Filter>
+    </ClInclude>
+    <ClInclude Include="MouseMng.h">
+      <Filter>base\util</Filter>
+    </ClInclude>
+    <ClInclude Include="ResourceManager.h">
+      <Filter>base\util</Filter>
+    </ClInclude>
+    <ClInclude Include="LightColor.h">
+      <Filter>Demo\LightColor</Filter>
+    </ClInclude>
+    <ClInclude Include="GridAxisHelper.h">
+      <Filter>base\grid</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="demo.cpp">
+      <Filter>base</Filter>
+    </ClCompile>
+    <ClCompile Include="main.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="DemoManager.cpp">
+      <Filter>base</Filter>
+    </ClCompile>
+    <ClCompile Include="Light.cpp">
+      <Filter>base\Light</Filter>
+    </ClCompile>
+    <ClCompile Include="Camera.cpp">
+      <Filter>base\camera</Filter>
+    </ClCompile>
+    <ClCompile Include="Model.cpp">
+      <Filter>base\model</Filter>
+    </ClCompile>
+    <ClCompile Include="ModelLoadingDemo.cpp">
+      <Filter>base\model</Filter>
+    </ClCompile>
+    <ClCompile Include="utils.cpp">
+      <Filter>base\util</Filter>
+    </ClCompile>
+    <ClCompile Include="shader.cpp">
+      <Filter>base\util</Filter>
+    </ClCompile>
+    <ClCompile Include="ResourceManager.cpp">
+      <Filter>base\util</Filter>
+    </ClCompile>
+    <ClCompile Include="LightColor.cpp">
+      <Filter>Demo\LightColor</Filter>
+    </ClCompile>
+    <ClCompile Include="GridAxisHelper.cpp">
+      <Filter>base\grid</Filter>
+    </ClCompile>
+  </ItemGroup>
+</Project>
