@@ -528,11 +528,8 @@ void LightColorDemo::Render() {
 }
 
 void LightColorDemo::RenderImGui() {
-    RenderCameraControls();
-    RenderLightControls();
-    RenderGridAxisControls();
 
-    ImGui::Begin("LightColor Demo with Texture Maps");
+    // ImGui::Begin("LightColor Demo with Texture Maps");
 
     ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Texture Maps:");
     ImGui::BulletText("Diffuse Map: Controls surface color");
@@ -576,7 +573,7 @@ void LightColorDemo::RenderImGui() {
     ImGui::BulletText("Dark areas on wooden parts (low specular)");
     ImGui::BulletText("Yellow light source cube");
 
-    ImGui::End();
+    // ImGui::End();
 }
 
 void LightColorDemo::Cleanup() {

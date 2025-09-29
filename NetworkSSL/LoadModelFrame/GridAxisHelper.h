@@ -18,7 +18,7 @@ struct GridConfig {
 struct AxisConfig {
     bool enabled = true;
     float length = 5.0f;         // 轴长度
-    float arrowSize = 0.3f;      // 箭头大小
+    float arrowSize = 0.05f;      // 箭头大小
     glm::vec3 xColor = glm::vec3(1.0f, 0.0f, 0.0f);  // X轴红色
     glm::vec3 yColor = glm::vec3(0.0f, 1.0f, 0.0f);  // Y轴绿色
     glm::vec3 zColor = glm::vec3(0.0f, 0.0f, 1.0f);  // Z轴蓝色

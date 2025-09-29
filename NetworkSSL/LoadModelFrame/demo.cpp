@@ -27,7 +27,7 @@ glm::mat4 Demo::GetProjectionMatrix() const {
 }
 
 void Demo::RenderCameraControls() {
-    ImGui::Begin("Camera Controls");
+    // ImGui::Begin("Camera Controls");
 
     const char* cameraTypes[] = { "Orbit", "FPS", "Free" };
     int currentType = (int)camera->GetType();
@@ -46,11 +46,11 @@ void Demo::RenderCameraControls() {
     ImGui::SliderFloat("Move Speed", &camera->moveSpeed, 0.1f, 10.0f);
     ImGui::SliderFloat("Mouse Sensitivity", &camera->mouseSensitivity, 10.0f, 500.0f);
 
-    ImGui::End();
+    // ImGui::End();
 }
 
 void Demo::RenderLightControls() {
-    ImGui::Begin("Light Controls");
+    // ImGui::Begin("Light Controls");
 
     // ========== 添加灯光按钮 ==========
     ImGui::Text("Add Lights:");
@@ -237,7 +237,7 @@ void Demo::RenderLightControls() {
         ImGui::PopID();
     }
 
-    ImGui::End();
+    // ImGui::End();
 }
 
 
@@ -268,7 +268,7 @@ void Demo::RenderGridAndAxis() {
 void Demo::RenderGridAxisControls() {
     if (!gridAxisHelper) return;
 
-    ImGui::Begin("Grid & Axis");
+    // ImGui::Begin("Grid & Axis");
 
     auto& gridConfig = gridAxisHelper->GetGridConfig();
     auto& axisConfig = gridAxisHelper->GetAxisConfig();
@@ -294,6 +294,41 @@ void Demo::RenderGridAxisControls() {
         ImGui::ColorEdit3("X-Axis Color", &axisConfig.xColor[0]);
         ImGui::ColorEdit3("Y-Axis Color", &axisConfig.yColor[0]);
         ImGui::ColorEdit3("Z-Axis Color", &axisConfig.zColor[0]);
+    }
+
+    // ImGui::End();
+}
+
+// 新增：统一的配置面板渲染
+void Demo::RenderControlPanel() {
+    ImGui::Begin("Control Panel", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
+
+    if (ImGui::BeginTabBar("ControlTabs")) {
+        // Tab 1: Demo 特定配置
+        if (ImGui::BeginTabItem("Demo")) {
+            RenderImGui();  // 调用子类的自定义 UI
+            ImGui::EndTabItem();
+        }
+
+        // Tab 2: 相机配置
+        if (ImGui::BeginTabItem("Camera")) {
+            RenderCameraControls();
+            ImGui::EndTabItem();
+        }
+
+        // Tab 3: 光照配置
+        if (ImGui::BeginTabItem("Lighting")) {
+            RenderLightControls();
+            ImGui::EndTabItem();
+        }
+
+        // Tab 4: 网格和坐标轴
+        if (ImGui::BeginTabItem("Grid & Axis")) {
+            RenderGridAxisControls();
+            ImGui::EndTabItem();
+        }
+
+        ImGui::EndTabBar();
     }
 
     ImGui::End();

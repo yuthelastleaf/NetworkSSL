@@ -66,7 +66,7 @@ void DemoManager::RenderImGui() {
 
     // 当前Demo的控制面板
     if (currentDemo) {
-        currentDemo->RenderImGui();
+        currentDemo->RenderControlPanel();
     }
 }
 

@@ -31,6 +31,7 @@ public:
     virtual void Cleanup() = 0;
     virtual std::string GetName() const = 0;
     virtual void ProcessInput(GLFWwindow* window, float deltaTime);
+    void RenderControlPanel();
 
     // 相机和光照访问接口
     Camera* GetCamera() { return camera.get(); }
