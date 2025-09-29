@@ -13,8 +13,8 @@ public:
     // 轨道相机参数
     glm::vec3 target = glm::vec3(0.0f);
     float radius = 5.0f;
-    float yaw = 0.0f;
-    float pitch = 0.0f;
+    float yaw = 45.0f;
+    float pitch = 45.0f;
 
     // FPS/自由相机参数
     glm::vec3 position = glm::vec3(0.0f, 0.0f, 3.0f);

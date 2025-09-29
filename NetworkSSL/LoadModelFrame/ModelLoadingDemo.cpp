@@ -15,12 +15,17 @@ void ModelLoadingDemo::Initialize() {
     camera->radius = 8.0f;
     camera->target = glm::vec3(0.0f, 0.0f, 0.0f);
 
+    // 初始化网格和坐标轴
+    gridAxisHelper->Initialize();
+    // 可选：根据相机距离自动调整
+    gridAxisHelper->UpdateGridForCamera(camera->radius);
+
     // 创建基础光照
     auto dirLight = lightManager->CreateDirectionalLight();
-    dirLight->direction = glm::vec3(-0.2f, -1.0f, -0.3f);
-    dirLight->ambient = glm::vec3(0.05f, 0.05f, 0.05f);
-    dirLight->diffuse = glm::vec3(0.4f, 0.4f, 0.4f);
-    dirLight->specular = glm::vec3(0.5f, 0.5f, 0.5f);
+    dirLight->direction = glm::normalize(glm::vec3(-0.3f, -1.0f, -0.3f));
+    dirLight->ambient = glm::vec3(0.3f);
+    dirLight->diffuse = glm::vec3(1.0f);
+    dirLight->specular = glm::vec3(1.0f);
 
     // 添加一个点光源
     auto pointLight = lightManager->CreatePointLight(glm::vec3(2.0f, 2.0f, 2.0f));
@@ -29,7 +34,7 @@ void ModelLoadingDemo::Initialize() {
     pointLight->specular = glm::vec3(1.0f, 1.0f, 1.0f);
 
     // 尝试加载默认模型
-    loadModel("models/backpack/backpack.obj");
+    loadModel("models/614/GirlsFrontline LewisSSR0101.pmx");
 
     std::cout << "ModelLoadingDemo initialized" << std::endl;
 }
@@ -58,8 +63,11 @@ void ModelLoadingDemo::Update(float deltaTime) {
 }
 
 void ModelLoadingDemo::Render() {
-    glEnable(GL_DEPTH_TEST);
+    glClearColor(0.1f, 0.1f, 0.15f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+    glEnable(GL_DEPTH_TEST);
+    RenderGridAndAxis();
 
     if (model && modelShader) {
         modelShader->use();
@@ -86,11 +94,6 @@ void ModelLoadingDemo::Render() {
 }
 
 void ModelLoadingDemo::RenderImGui() {
-    RenderCameraControls();
-    RenderLightControls();
-
-    ImGui::Begin("Model Loading Controls");
-
     // 当前模型信息
     ImGui::Text("Current Model: %s", currentModelPath.c_str());
     ImGui::Separator();
@@ -146,8 +149,6 @@ void ModelLoadingDemo::RenderImGui() {
             modelScale = 1.0f;
         }
     }
-
-    ImGui::End();
 }
 
 void ModelLoadingDemo::Cleanup() {

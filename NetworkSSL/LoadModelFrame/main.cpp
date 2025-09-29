@@ -53,7 +53,7 @@ bool OpenGLApp::Initialize() {
     glEnable(GL_DEPTH_TEST);
 
     // зЂВс Demos
-    // demoManager.RegisterDemo("Model Loading", std::make_unique<ModelLoadingDemo>());
+    demoManager.RegisterDemo("Model Loading", std::make_unique<ModelLoadingDemo>());
     demoManager.RegisterDemo("LightColor Demo", std::make_unique<LightColorDemo>());
 
     std::cout << "OpenGL Learning Framework v2.0 initialized successfully!" << std::endl;

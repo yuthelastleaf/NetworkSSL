@@ -63,9 +63,9 @@ void Camera::ProcessKeyboard(int direction, float deltaTime) {
     if (type == CameraType::ORBIT) {
         // 轨道相机移动目标点
         switch (direction) {
-        case 0: target += front * velocity; break;  // W
+        case 0: target += worldUp * velocity; break;  // W
         case 1: target -= right * velocity; break;  // A
-        case 2: target -= front * velocity; break;  // S
+        case 2: target -= worldUp * velocity; break;  // S
         case 3: target += right * velocity; break;  // D
         }
         updateOrbitPosition();
@@ -73,9 +73,9 @@ void Camera::ProcessKeyboard(int direction, float deltaTime) {
     else {
         // FPS/自由相机移动相机位置
         switch (direction) {
-        case 0: position += front * velocity; break;  // W
+        case 0: position += worldUp * velocity; break;  // W
         case 1: position -= right * velocity; break;  // A
-        case 2: position -= front * velocity; break;  // S
+        case 2: position -= worldUp * velocity; break;  // S
         case 3: position += right * velocity; break;  // D
         }
     }
