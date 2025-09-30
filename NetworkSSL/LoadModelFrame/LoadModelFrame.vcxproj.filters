@@ -37,6 +37,9 @@
     <Filter Include="base\grid">
       <UniqueIdentifier>{69d5e971-84bf-4ac5-84ec-f12caa559478}</UniqueIdentifier>
     </Filter>
+    <Filter Include="base\framebuffer">
+      <UniqueIdentifier>{ec4fed7a-27d3-4d50-9506-8eefeb3f856f}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="demo.h">

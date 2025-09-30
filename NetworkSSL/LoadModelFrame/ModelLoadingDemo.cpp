@@ -1,40 +1,90 @@
-#include "demo.h"
+Ôªø#include "demo.h"
 #include "ResourceManager.h"
 #include "shader.h"
 #include <glad/glad.h>
+#include <GLFW/glfw3.h>
 #include <imgui.h>
 #include <iostream>
 
 void ModelLoadingDemo::Initialize() {
-    // º”‘ÿƒ£–Õ◊≈…´∆˜
+    // Âä†ËΩΩÊ®°ÂûãÁùÄËâ≤Âô®
     modelShader = ResourceManager::LoadShader("model",
         "shaders/model.vs", "shaders/model.fs");
+    outlineShader = ResourceManager::LoadShader("outline",
+        "shaders/stenciltest/outliner.vs", "shaders/stenciltest/outliner.fs");
+    screenShader = ResourceManager::LoadShader("screen",
+        "shaders/framebuffer/screen.vs", "shaders/framebuffer/screen.fs");
 
-    // …Ë÷√œ‡ª˙
+    // ËÆæÁΩÆÁõ∏Êú∫
     camera->SetType(CameraType::ORBIT);
     camera->radius = 8.0f;
     camera->target = glm::vec3(0.0f, 0.0f, 0.0f);
 
-    // ≥ı ºªØÕ¯∏Ò∫Õ◊¯±Í÷·
+    // ÂàùÂßãÂåñÁΩëÊ†ºÂíåÂùêÊ†áËΩ¥
     gridAxisHelper->Initialize();
-    // ø…—°£∫∏˘æ›œ‡ª˙æ‡¿Î◊‘∂Øµ˜’˚
+    // ÂèØÈÄâÔºöÊ†πÊçÆÁõ∏Êú∫Ë∑ùÁ¶ªËá™Âä®Ë∞ÉÊï¥
     gridAxisHelper->UpdateGridForCamera(camera->radius);
 
-    // ¥¥Ω®ª˘¥°π‚’’
+    // ÂàõÂª∫Âü∫Á°ÄÂÖâÁÖß
     auto dirLight = lightManager->CreateDirectionalLight();
     dirLight->direction = glm::normalize(glm::vec3(-0.3f, -1.0f, -0.3f));
     dirLight->ambient = glm::vec3(0.3f);
     dirLight->diffuse = glm::vec3(1.0f);
     dirLight->specular = glm::vec3(1.0f);
 
-    // ÃÌº”“ª∏ˆµ„π‚‘¥
+    // Ê∑ªÂä†‰∏Ä‰∏™ÁÇπÂÖâÊ∫ê
     auto pointLight = lightManager->CreatePointLight(glm::vec3(2.0f, 2.0f, 2.0f));
     pointLight->ambient = glm::vec3(0.05f, 0.05f, 0.05f);
     pointLight->diffuse = glm::vec3(0.8f, 0.8f, 0.8f);
     pointLight->specular = glm::vec3(1.0f, 1.0f, 1.0f);
 
-    // ≥¢ ‘º”‘ÿƒ¨»œƒ£–Õ
-    loadModel("models/614/GirlsFrontline LewisSSR0101.pmx");
+    // Â∞ùËØïÂä†ËΩΩÈªòËÆ§Ê®°Âûã
+    // loadModel("models/614/GirlsFrontline LewisSSR0101.pmx");
+
+    int width, height;
+    glfwGetFramebufferSize(glfwGetCurrentContext(), &width, &height);
+    // framebuffer configuration
+    // -------------------------
+    
+    glGenFramebuffers(1, &fbo);
+    glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+    // create a color attachment texture
+    glGenTextures(1, &textureColorbuffer);
+    glBindTexture(GL_TEXTURE_2D, textureColorbuffer);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, textureColorbuffer, 0);
+    // create a renderbuffer object for depth and stencil attachment (we won't be sampling these)
+    glGenRenderbuffers(1, &rbo);
+    glBindRenderbuffer(GL_RENDERBUFFER, rbo);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, width, height); // use a single renderbuffer object for both a depth AND stencil buffer.
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, rbo); // now actually attach it
+    // now that we actually created the framebuffer and added all attachments we want to check if it is actually complete now
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+        std::cout << "ERROR::FRAMEBUFFER:: Framebuffer is not complete!" << std::endl;
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+    float quadVertices[] = { // vertex attributes for a quad that fills the entire screen in Normalized Device Coordinates.
+        // positions   // texCoords
+        -1.0f,  1.0f,  0.0f, 1.0f,
+        -1.0f, -1.0f,  0.0f, 0.0f,
+         1.0f, -1.0f,  1.0f, 0.0f,
+
+        -1.0f,  1.0f,  0.0f, 1.0f,
+         1.0f, -1.0f,  1.0f, 0.0f,
+         1.0f,  1.0f,  1.0f, 1.0f
+    };
+    // screen quad VAO
+    glGenVertexArrays(1, &quadVAO);
+    glGenBuffers(1, &quadVBO);
+    glBindVertexArray(quadVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), &quadVertices, GL_STATIC_DRAW);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
 
     std::cout << "ModelLoadingDemo initialized" << std::endl;
 }
@@ -53,7 +103,7 @@ void ModelLoadingDemo::loadModel(const std::string& path) {
 }
 
 void ModelLoadingDemo::Update(float deltaTime) {
-    // ø…“‘ÃÌº”ƒ£–Õ∂Øª≠ªÚ∆‰À˚∏¸–¬¬ﬂº≠
+    // ÂèØ‰ª•Ê∑ªÂä†Ê®°ÂûãÂä®ÁîªÊàñÂÖ∂‰ªñÊõ¥Êñ∞ÈÄªËæë
     if (autoRotate && model) {
         static float rotation = 0.0f;
         rotation += rotationSpeed * deltaTime;
@@ -62,23 +112,13 @@ void ModelLoadingDemo::Update(float deltaTime) {
     }
 }
 
-void ModelLoadingDemo::Render() {
-    glClearColor(0.1f, 0.1f, 0.15f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+void ModelLoadingDemo::RenderScene() {
+    // Ëøô‰∏™ÂáΩÊï∞ÂåÖÂê´ÊâÄÊúâÂú∫ÊôØÊ∏≤ÊüìÈÄªËæëÔºàÂåÖÊã¨‰Ω†ÁöÑËΩÆÂªì‰ª£Á†ÅÔºâ
 
-    glEnable(GL_DEPTH_TEST);
     RenderGridAndAxis();
 
-    if (model && modelShader) {
-        modelShader->use();
-        modelShader->setMat4("view", GetViewMatrix());
-        modelShader->setMat4("projection", GetProjectionMatrix());
-        modelShader->setVec3("viewPos", camera->position);
-
-        // ”¶”√π‚’’
-        lightManager->ApplyLightsToShader(*modelShader);
-
-        // º∆À„ƒ£–Õ±‰ªªæÿ’Û
+    if (model && modelShader && outlineShader) {
+        // ===== ËÆ°ÁÆóÊ®°ÂûãÁü©Èòµ =====
         glm::mat4 modelMatrix = glm::mat4(1.0f);
         modelMatrix = glm::translate(modelMatrix, modelPosition);
         modelMatrix = glm::rotate(modelMatrix, glm::radians(modelRotation.x), glm::vec3(1, 0, 0));
@@ -86,31 +126,137 @@ void ModelLoadingDemo::Render() {
         modelMatrix = glm::rotate(modelMatrix, glm::radians(modelRotation.z), glm::vec3(0, 0, 1));
         modelMatrix = glm::scale(modelMatrix, glm::vec3(modelScale));
 
-        modelShader->setMat4("model", modelMatrix);
+        // ===== Ê≠•È™§ 1ÔºöÁªòÂà∂Ê≠£Â∏∏Áâ©‰Ωì =====
+        if (enableOutline) {
+            glStencilFunc(GL_ALWAYS, 1, 0xFF);
+            glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
+            glStencilMask(0xFF);
+        }
 
-        // ‰÷»æƒ£–Õ
+        modelShader->use();
+        modelShader->setMat4("model", modelMatrix);
+        modelShader->setMat4("view", GetViewMatrix());
+        modelShader->setMat4("projection", GetProjectionMatrix());
+        modelShader->setVec3("viewPos", camera->position);
+        lightManager->ApplyLightsToShader(*modelShader);
+
         model->Draw(*modelShader);
+
+        // ===== Ê≠•È™§ 2ÔºöÁªòÂà∂ËΩÆÂªì =====
+        if (enableOutline) {
+            glStencilFunc(GL_NOTEQUAL, 1, 0xFF);
+            glStencilMask(0x00);
+            glDisable(GL_DEPTH_TEST);
+            glDepthMask(GL_FALSE);
+            glEnable(GL_BLEND);
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+            outlineShader->use();
+            outlineShader->setMat4("model", modelMatrix);
+            outlineShader->setMat4("view", GetViewMatrix());
+            outlineShader->setMat4("projection", GetProjectionMatrix());
+            outlineShader->setVec3("outlineColor", outline_color);
+            outlineShader->setFloat("outlineAlpha", outline_alpha);
+            outlineShader->setFloat("outlineWidth", outline_width);
+
+            model->Draw(*outlineShader);
+
+            // ÊÅ¢Â§çÁä∂ÊÄÅ
+            glStencilMask(0xFF);
+            glStencilFunc(GL_ALWAYS, 0, 0xFF);
+            glEnable(GL_DEPTH_TEST);
+            glDepthMask(GL_TRUE);
+            glDisable(GL_BLEND);
+        }
+    }
+}
+
+void ModelLoadingDemo::RenderToFramebuffer() {
+    // Á¨¨‰∏ÄÈÅçÔºöÊ∏≤ÊüìÂà∞Â∏ßÁºìÂÜ≤Á∫πÁêÜ
+
+    glClearColor(0.1f, 0.1f, 0.15f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+    glEnable(GL_DEPTH_TEST);
+    glEnable(GL_STENCIL_TEST);  // ËΩÆÂªìÈúÄË¶ÅÊ®°ÊùøÊµãËØï
+
+    RenderScene();  // Ë∞ÉÁî®ÂÆåÊï¥ÁöÑÂú∫ÊôØÊ∏≤ÊüìÔºàÂåÖÊã¨ËΩÆÂªìÔºâ
+
+    glDisable(GL_STENCIL_TEST);
+}
+
+void ModelLoadingDemo::RenderToScreen() {
+    // Á¨¨‰∫åÈÅçÔºöÂêéÂ§ÑÁêÜÂπ∂Ê∏≤ÊüìÂà∞Â±èÂπï
+    glClearColor(1.0f, 1.0f, 1.0f, 1.0f);  // ÁôΩËâ≤ËÉåÊôØ
+    glClear(GL_COLOR_BUFFER_BIT);
+
+    glDisable(GL_DEPTH_TEST);
+
+    screenShader->use();
+    screenShader->setInt("screenTexture", 0);
+    screenShader->setInt("effectType", postProcessEffect);
+
+    glActiveTexture(GL_TEXTURE0);
+
+    glEnable(GL_DEPTH_TEST);
+}
+
+void ModelLoadingDemo::Render() {
+    if (useFramebuffer) {
+        // Ê≠•È™§1: ÂÖàÁªëÂÆö FBO,Ê∏≤ÊüìÂà∞Á∫πÁêÜ
+        glBindFramebuffer(GL_FRAMEBUFFER, fbo);  // ‚Üê ÂÖ≥ÈîÆ!
+        glClearColor(0.1f, 0.1f, 0.15f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+        glEnable(GL_DEPTH_TEST);
+        glEnable(GL_STENCIL_TEST);
+
+        RenderScene();  // Áé∞Âú®Âú∫ÊôØÊ∏≤ÊüìÂà∞ textureColorbuffer Á∫πÁêÜ‰∫Ü
+
+        // Ê≠•È™§2: ÂàáÊç¢Âà∞ÈªòËÆ§Â∏ßÁºìÂÜ≤(Â±èÂπï),ÁªòÂà∂Á∫πÁêÜ
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        glDisable(GL_DEPTH_TEST);
+        glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
+
+        screenShader->use();
+        screenShader->setInt("screenTexture", 0);
+        screenShader->setInt("effectType", postProcessEffect);
+
+        glBindVertexArray(quadVAO);
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, textureColorbuffer);  // Áé∞Âú®Á∫πÁêÜÊúâÂÜÖÂÆπ‰∫Ü!
+        glDrawArrays(GL_TRIANGLES, 0, 6);
+    }
+    else {
+        // Áõ¥Êé•Ê∏≤ÊüìÔºöÂú∫ÊôØ ‚Üí Â±èÂπïÔºà‰Ω†ÁöÑÂéüÂßãÊñπÂºèÔºâ
+        glClearColor(0.1f, 0.1f, 0.15f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+        glEnable(GL_DEPTH_TEST);
+        glEnable(GL_STENCIL_TEST);
+
+        RenderScene();
+
+        glDisable(GL_STENCIL_TEST);
     }
 }
 
 void ModelLoadingDemo::RenderImGui() {
-    // µ±«∞ƒ£–Õ–≈œ¢
+    // ÂΩìÂâçÊ®°Âûã‰ø°ÊÅØ
     ImGui::Text("Current Model: %s", currentModelPath.c_str());
     ImGui::Separator();
 
-    // ƒ£–Õº”‘ÿ
-    static char modelPath[256] = "models/backpack/backpack.obj";
+    // Ê®°ÂûãÂä†ËΩΩ
+    static char modelPath[256] = "models/614/GirlsFrontline LewisSSR0101.pmx";
     ImGui::InputText("Model Path", modelPath, sizeof(modelPath));
     ImGui::SameLine();
     if (ImGui::Button("Load")) {
         loadModel(std::string(modelPath));
     }
 
-    // ‘§…Ëƒ£–Õ∞¥≈•
+    // È¢ÑËÆæÊ®°ÂûãÊåâÈíÆ
     ImGui::Text("Quick Load:");
     if (ImGui::Button("Backpack")) {
-        strcpy_s(modelPath, "models/backpack/backpack.obj");
-        loadModel("models/backpack/backpack.obj");
+        strcpy_s(modelPath, "models/614/GirlsFrontline LewisSSR0101.pmx");
+        loadModel("models/614/GirlsFrontline LewisSSR0101.pmx");
     }
     ImGui::SameLine();
     if (ImGui::Button("Nanosuit")) {
@@ -127,32 +273,66 @@ void ModelLoadingDemo::RenderImGui() {
         ImGui::Separator();
         ImGui::Text("Model Transform:");
 
-        // Œª÷√øÿ÷∆
+        // ‰ΩçÁΩÆÊéßÂà∂
         ImGui::SliderFloat3("Position", &modelPosition.x, -10.0f, 10.0f);
 
-        // –˝◊™øÿ÷∆
+        // ÊóãËΩ¨ÊéßÂà∂
         ImGui::SliderFloat3("Rotation", &modelRotation.x, 0.0f, 360.0f);
 
-        // Àı∑≈øÿ÷∆
+        // Áº©ÊîæÊéßÂà∂
         ImGui::SliderFloat("Scale", &modelScale, 0.1f, 5.0f);
 
-        // ◊‘∂Ø–˝◊™
+        // Ëá™Âä®ÊóãËΩ¨
         ImGui::Checkbox("Auto Rotate", &autoRotate);
         if (autoRotate) {
             ImGui::SliderFloat("Rotation Speed", &rotationSpeed, 10.0f, 180.0f);
         }
 
-        // ÷ÿ÷√∞¥≈•
+        // ÈáçÁΩÆÊåâÈíÆ
         if (ImGui::Button("Reset Transform")) {
             modelPosition = glm::vec3(0.0f);
             modelRotation = glm::vec3(0.0f);
             modelScale = 1.0f;
         }
     }
+
+    ImGui::Separator();
+    ImGui::SeparatorText("Rendering Settings");
+
+    // ËΩÆÂªìÊéßÂà∂
+    ImGui::Checkbox("Enable Outline", &enableOutline);
+
+    if (enableOutline) {
+        ImGui::Indent();
+        ImGui::ColorEdit3("Outline Color", &outline_color.x);
+        ImGui::SliderFloat("Outline Width", &outline_width, 0.001f, 0.1f, "%.3f");
+        ImGui::SliderFloat("Outline Alpha", &outline_alpha, 0.0f, 1.0f);
+        ImGui::Unindent();
+    }
+
+    ImGui::Separator();
+    ImGui::SeparatorText("Post-Processing");
+
+    // Â∏ßÁºìÂÜ≤ÊéßÂà∂
+    ImGui::Checkbox("Enable Framebuffer", &useFramebuffer);
+
+    if (useFramebuffer) {
+        ImGui::Indent();
+        ImGui::Text("Post-Processing Effect:");
+        ImGui::RadioButton("None (Normal)", &postProcessEffect, 0);
+        ImGui::RadioButton("Inversion", &postProcessEffect, 1);
+        ImGui::RadioButton("Grayscale", &postProcessEffect, 2);
+        ImGui::RadioButton("Sharpen", &postProcessEffect, 3);
+        ImGui::RadioButton("Blur", &postProcessEffect, 4);
+        ImGui::RadioButton("Edge Detection", &postProcessEffect, 5);
+        ImGui::Unindent();
+
+        // ImGui::Text("Framebuffer: %dx%d", framebuffer->width, framebuffer->height);
+    }
 }
 
 void ModelLoadingDemo::Cleanup() {
-    // ◊ ‘¥ª·‘⁄ResourceManager÷–◊‘∂Ø«Â¿Ì
+    // ËµÑÊ∫ê‰ºöÂú®ResourceManager‰∏≠Ëá™Âä®Ê∏ÖÁêÜ
     model = nullptr;
 }
 

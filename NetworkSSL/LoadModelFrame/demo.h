@@ -59,6 +59,7 @@ class ModelLoadingDemo : public Demo {
 private:
     std::shared_ptr<Model> model;
     std::shared_ptr<Shader> modelShader;
+    std::shared_ptr<Shader> outlineShader;
     std::string currentModelPath = "None";
 
     // 模型变换参数
@@ -70,6 +71,22 @@ private:
     bool autoRotate = false;
     float rotationSpeed = 45.0f; // degrees per second
 
+    // 帧缓冲相关
+    std::shared_ptr<Shader> screenShader;
+    unsigned int fbo = 0;
+    unsigned int textureColorbuffer = 0;
+    unsigned int rbo;
+    unsigned int quadVAO, quadVBO;
+
+    // 控制选项
+    bool useFramebuffer = false;     // 是否使用帧缓冲
+    bool enableOutline = true;       // 是否绘制轮廓
+    int postProcessEffect = 0;       // 后处理效果
+
+    glm::vec3 outline_color = glm::vec3(1.0f, 0.5f, 0.0f);
+    float outline_alpha = 0.5f;
+    float outline_width = 0.02f;
+
 public:
     void Initialize() override;
     void Update(float deltaTime) override;
@@ -80,6 +97,11 @@ public:
 
 private:
     void loadModel(const std::string& path);
+
+    // 辅助函数
+    void RenderScene();  // 渲染场景（共用）
+    void RenderToFramebuffer();  // 渲染到帧缓冲
+    void RenderToScreen();  // 渲染到屏幕
 };
 
 // Demo管理器
