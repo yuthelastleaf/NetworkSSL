@@ -64,6 +64,15 @@ uniform int pointLightCount;
 uniform int spotLightCount;
 
 uniform vec3 viewPos;
+uniform samplerCube skybox;
+
+// 反射控制
+uniform bool enableReflection;
+uniform float reflectionStrength;  // 0.0 到 1.0
+
+// 折射控制（新增）
+uniform bool enableRefraction;
+uniform float refractionRatio;  // 折射率比值
 
 // 函数声明
 vec3 CalcDirLight(DirLight light, vec3 normal, vec3 viewDir);
@@ -89,7 +98,27 @@ void main()
     for(int i = 0; i < spotLightCount && i < MAX_SPOT_LIGHTS; i++)
         result += CalcSpotLight(spotLights[i], norm, WorldPos, viewDir);
     
-    FragColor = vec4(result, 1.0);
+    // FragColor = vec4(result, 1.0);
+
+    if (enableReflection) {
+        // 计算反射
+        vec3 I = normalize(WorldPos - viewPos);
+        vec3 R = reflect(I, normalize(Normal));
+        vec4 reflectionColor = texture(skybox, R);
+        
+        // 混合原始颜色和反射
+        FragColor = mix(vec4(result, 1.0), reflectionColor, reflectionStrength);
+    } 
+    else if (enableRefraction) {
+        vec3 I = normalize(WorldPos - viewPos);
+        vec3 R = refract(I, norm, refractionRatio);
+        vec3 refractionColor = texture(skybox, R).rgb;
+        FragColor = vec4(mix(result, refractionColor, 0.9),1.0);  // 折射通常很强
+    }
+    else {
+        // 正常渲染
+        FragColor = vec4(result, 1.0);
+    }
 }
 
 vec3 CalcDirLight(DirLight light, vec3 normal, vec3 viewDir)

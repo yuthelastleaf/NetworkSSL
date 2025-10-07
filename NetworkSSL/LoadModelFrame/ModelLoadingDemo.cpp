@@ -5,6 +5,8 @@
 #include <GLFW/glfw3.h>
 #include <imgui.h>
 #include <iostream>
+#include "stb_image.h"
+
 
 void ModelLoadingDemo::Initialize() {
     // 加载模型着色器
@@ -14,6 +16,9 @@ void ModelLoadingDemo::Initialize() {
         "shaders/stenciltest/outliner.vs", "shaders/stenciltest/outliner.fs");
     screenShader = ResourceManager::LoadShader("screen",
         "shaders/framebuffer/screen.vs", "shaders/framebuffer/screen.fs");
+    // 加载天空盒着色器
+    skyboxShader = ResourceManager::LoadShader("skybox",
+        "shaders/skybox/skybox.vs", "shaders/skybox/skybox.fs");
 
     // 设置相机
     camera->SetType(CameraType::ORBIT);
@@ -65,6 +70,24 @@ void ModelLoadingDemo::Initialize() {
         std::cout << "ERROR::FRAMEBUFFER:: Framebuffer is not complete!" << std::endl;
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
+    glGenFramebuffers(1, &rfbo);
+    glBindFramebuffer(GL_FRAMEBUFFER, rfbo);
+    // create a color attachment texture
+    glGenTextures(1, &rtextureColorbuffer);
+    glBindTexture(GL_TEXTURE_2D, rtextureColorbuffer);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, rtextureColorbuffer, 0);
+    glGenRenderbuffers(1, &rrbo);
+    glBindRenderbuffer(GL_RENDERBUFFER, rrbo);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, width, height); // use a single renderbuffer object for both a depth AND stencil buffer.
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, rrbo); // now actually attach it
+    // now that we actually created the framebuffer and added all attachments we want to check if it is actually complete now
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+        std::cout << "ERROR::FRAMEBUFFER:: Framebuffer is not complete!" << std::endl;
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
     float quadVertices[] = { // vertex attributes for a quad that fills the entire screen in Normalized Device Coordinates.
         // positions   // texCoords
         -1.0f,  1.0f,  0.0f, 1.0f,
@@ -75,6 +98,64 @@ void ModelLoadingDemo::Initialize() {
          1.0f, -1.0f,  1.0f, 0.0f,
          1.0f,  1.0f,  1.0f, 1.0f
     };
+
+    // 小窗口位置（屏幕右下角，200x150大小）
+    float smallQuadVertices[] = {
+        // 位置范围：右下角小窗口
+        // X: 0.6 到 1.0, Y: -1.0 到 -0.5
+        0.6f, -0.5f,  0.0f, 1.0f,   // 左上
+        0.6f, -1.0f,  0.0f, 0.0f,   // 左下
+        1.0f, -1.0f,  1.0f, 0.0f,   // 右下
+        0.6f, -0.5f,  0.0f, 1.0f,   // 左上
+        1.0f, -1.0f,  1.0f, 0.0f,   // 右下
+        1.0f, -0.5f,  1.0f, 1.0f    // 右上
+    };
+
+    float skyboxVertices[] = {
+        // positions          
+        -1.0f,  1.0f, -1.0f,
+        -1.0f, -1.0f, -1.0f,
+         1.0f, -1.0f, -1.0f,
+         1.0f, -1.0f, -1.0f,
+         1.0f,  1.0f, -1.0f,
+        -1.0f,  1.0f, -1.0f,
+
+        -1.0f, -1.0f,  1.0f,
+        -1.0f, -1.0f, -1.0f,
+        -1.0f,  1.0f, -1.0f,
+        -1.0f,  1.0f, -1.0f,
+        -1.0f,  1.0f,  1.0f,
+        -1.0f, -1.0f,  1.0f,
+
+         1.0f, -1.0f, -1.0f,
+         1.0f, -1.0f,  1.0f,
+         1.0f,  1.0f,  1.0f,
+         1.0f,  1.0f,  1.0f,
+         1.0f,  1.0f, -1.0f,
+         1.0f, -1.0f, -1.0f,
+
+        -1.0f, -1.0f,  1.0f,
+        -1.0f,  1.0f,  1.0f,
+         1.0f,  1.0f,  1.0f,
+         1.0f,  1.0f,  1.0f,
+         1.0f, -1.0f,  1.0f,
+        -1.0f, -1.0f,  1.0f,
+
+        -1.0f,  1.0f, -1.0f,
+         1.0f,  1.0f, -1.0f,
+         1.0f,  1.0f,  1.0f,
+         1.0f,  1.0f,  1.0f,
+        -1.0f,  1.0f,  1.0f,
+        -1.0f,  1.0f, -1.0f,
+
+        -1.0f, -1.0f, -1.0f,
+        -1.0f, -1.0f,  1.0f,
+         1.0f, -1.0f, -1.0f,
+         1.0f, -1.0f, -1.0f,
+        -1.0f, -1.0f,  1.0f,
+         1.0f, -1.0f,  1.0f
+    };
+
     // screen quad VAO
     glGenVertexArrays(1, &quadVAO);
     glGenBuffers(1, &quadVBO);
@@ -85,6 +166,57 @@ void ModelLoadingDemo::Initialize() {
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(1);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
+
+    glGenVertexArrays(1, &rquadVAO);
+    glGenBuffers(1, &rquadVBO);
+    glBindVertexArray(rquadVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, rquadVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(smallQuadVertices), smallQuadVertices, GL_STATIC_DRAW);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
+    glEnableVertexAttribArray(1);
+
+    glGenVertexArrays(1, &skyboxVAO);
+    glGenBuffers(1, &skyboxVBO);
+    glBindVertexArray(skyboxVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, skyboxVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(skyboxVertices), &skyboxVertices, GL_STATIC_DRAW);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+
+    std::vector<std::string> faces = {
+        "skybox/warmhouse/px.png",  // GL_TEXTURE_CUBE_MAP_POSITIVE_X (右)
+        "skybox/warmhouse/nx.png",  // GL_TEXTURE_CUBE_MAP_NEGATIVE_X (左)
+        "skybox/warmhouse/py.png",  // GL_TEXTURE_CUBE_MAP_POSITIVE_Y (上)
+        "skybox/warmhouse/ny.png",  // GL_TEXTURE_CUBE_MAP_NEGATIVE_Y (下)
+        "skybox/warmhouse/pz.png",  // GL_TEXTURE_CUBE_MAP_POSITIVE_Z (后)
+        "skybox/warmhouse/nz.png"   // GL_TEXTURE_CUBE_MAP_NEGATIVE_Z (前)
+    };
+
+    glGenTextures(1, &sky_texture);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, sky_texture);
+
+    int skywidth, skyheight, nrChannels;
+    for (unsigned int i = 0; i < faces.size(); i++) {
+        unsigned char* data = stbi_load(faces[i].c_str(), &skywidth, &skyheight, &nrChannels, 0);
+        if (data) {
+            GLenum format = (nrChannels == 4) ? GL_RGBA : GL_RGB;  // 根据通道数选择格式
+            glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i,
+                0, format, skywidth, skyheight, 0, format, GL_UNSIGNED_BYTE, data);
+            stbi_image_free(data);
+            std::cout << "Loaded skybox face " << i << ": " << faces[i] << std::endl;  // 调试
+        }
+        else {
+            std::cout << "Failed to load: " << faces[i] << std::endl;
+        }
+    }
+
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
 
     std::cout << "ModelLoadingDemo initialized" << std::endl;
 }
@@ -112,7 +244,8 @@ void ModelLoadingDemo::Update(float deltaTime) {
     }
 }
 
-void ModelLoadingDemo::RenderScene() {
+void ModelLoadingDemo::RenderScene(bool reverse) {
+    RenderSkybox(reverse);
     // 这个函数包含所有场景渲染逻辑（包括你的轮廓代码）
 
     RenderGridAndAxis();
@@ -127,7 +260,7 @@ void ModelLoadingDemo::RenderScene() {
         modelMatrix = glm::scale(modelMatrix, glm::vec3(modelScale));
 
         // ===== 步骤 1：绘制正常物体 =====
-        if (enableOutline) {
+        if (enableOutline && !reverse) {
             glStencilFunc(GL_ALWAYS, 1, 0xFF);
             glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
             glStencilMask(0xFF);
@@ -135,15 +268,34 @@ void ModelLoadingDemo::RenderScene() {
 
         modelShader->use();
         modelShader->setMat4("model", modelMatrix);
-        modelShader->setMat4("view", GetViewMatrix());
+        if (!reverse) {
+            modelShader->setMat4("view", GetViewMatrix());
+        }
+        else {
+            modelShader->setMat4("view", GetBackViewMatrix());
+        }
         modelShader->setMat4("projection", GetProjectionMatrix());
         modelShader->setVec3("viewPos", camera->position);
+
+        // 反射设置
+        modelShader->setBool("enableReflection", enableReflection);
+        modelShader->setFloat("reflectionStrength", reflectionStrength);
+
+        // 折射设置（新增）
+        modelShader->setBool("enableRefraction", enableRefraction);
+        modelShader->setFloat("refractionRatio", refractionRatio);
+
+        // 绑定天空盒纹理到另一个纹理单元
+        glActiveTexture(GL_TEXTURE5);  // 使用纹理单元5
+        glBindTexture(GL_TEXTURE_CUBE_MAP, sky_texture);
+        modelShader->setInt("skybox", 5);
+
         lightManager->ApplyLightsToShader(*modelShader);
 
         model->Draw(*modelShader);
 
         // ===== 步骤 2：绘制轮廓 =====
-        if (enableOutline) {
+        if (enableOutline && !reverse) {
             glStencilFunc(GL_NOTEQUAL, 1, 0xFF);
             glStencilMask(0x00);
             glDisable(GL_DEPTH_TEST);
@@ -200,6 +352,25 @@ void ModelLoadingDemo::RenderToScreen() {
     glEnable(GL_DEPTH_TEST);
 }
 
+void ModelLoadingDemo::RenderSkybox(bool reverse) {
+    glDepthFunc(GL_LEQUAL);
+
+    skyboxShader->use();
+
+    glm::mat4 view = reverse ? GetBackViewMatrix() : GetViewMatrix();
+    view = glm::mat4(glm::mat3(view));
+
+    skyboxShader->setMat4("view", view);
+    skyboxShader->setMat4("projection", GetProjectionMatrix());
+    skyboxShader->setInt("skybox", 10);
+
+    glBindVertexArray(skyboxVAO);
+    glActiveTexture(GL_TEXTURE10);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, sky_texture);
+    glDrawArrays(GL_TRIANGLES, 0, 36);
+
+    glDepthFunc(GL_LESS);
+}
 void ModelLoadingDemo::Render() {
     if (useFramebuffer) {
         // 步骤1: 先绑定 FBO,渲染到纹理
@@ -211,6 +382,12 @@ void ModelLoadingDemo::Render() {
 
         RenderScene();  // 现在场景渲染到 textureColorbuffer 纹理了
 
+        glDisable(GL_STENCIL_TEST);
+        glBindFramebuffer(GL_FRAMEBUFFER, rfbo);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+        RenderScene(true);
+
+        glEnable(GL_STENCIL_TEST);
         // 步骤2: 切换到默认帧缓冲(屏幕),绘制纹理
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
         glDisable(GL_DEPTH_TEST);
@@ -225,6 +402,11 @@ void ModelLoadingDemo::Render() {
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, textureColorbuffer);  // 现在纹理有内容了!
         glDrawArrays(GL_TRIANGLES, 0, 6);
+
+        glBindVertexArray(rquadVAO);
+        glBindTexture(GL_TEXTURE_2D, rtextureColorbuffer);
+        glDrawArrays(GL_TRIANGLES, 0, 6);
+
     }
     else {
         // 直接渲染：场景 → 屏幕（你的原始方式）
@@ -245,7 +427,7 @@ void ModelLoadingDemo::RenderImGui() {
     ImGui::Separator();
 
     // 模型加载
-    static char modelPath[256] = "models/614/GirlsFrontline LewisSSR0101.pmx";
+    static char modelPath[256] = "models/cp1003/CP_1003_06.pmx";
     ImGui::InputText("Model Path", modelPath, sizeof(modelPath));
     ImGui::SameLine();
     if (ImGui::Button("Load")) {
@@ -255,8 +437,8 @@ void ModelLoadingDemo::RenderImGui() {
     // 预设模型按钮
     ImGui::Text("Quick Load:");
     if (ImGui::Button("Backpack")) {
-        strcpy_s(modelPath, "models/614/GirlsFrontline LewisSSR0101.pmx");
-        loadModel("models/614/GirlsFrontline LewisSSR0101.pmx");
+        strcpy_s(modelPath, "models/cp1003/CP_1003_06.pmx");
+        loadModel("models/cp1003/CP_1003_06.pmx");
     }
     ImGui::SameLine();
     if (ImGui::Button("Nanosuit")) {
@@ -329,6 +511,29 @@ void ModelLoadingDemo::RenderImGui() {
 
         // ImGui::Text("Framebuffer: %dx%d", framebuffer->width, framebuffer->height);
     }
+
+    ImGui::Separator();
+    ImGui::SeparatorText("Reflection Settings");
+
+    ImGui::Checkbox("Enable Reflection", &enableReflection);
+    if (enableReflection) {
+        ImGui::SliderFloat("Reflection Strength", &reflectionStrength, 0.0f, 1.0f);
+    }
+
+    ImGui::Checkbox("Enable Refraction", &enableRefraction);
+    if (enableRefraction) {
+        ImGui::Indent();
+        if (ImGui::BeginCombo("Material", "Custom")) {
+            if (ImGui::Selectable("Air (1.00)")) refractionRatio = 1.0f / 1.00f;
+            if (ImGui::Selectable("Water (1.33)")) refractionRatio = 1.0f / 1.33f;
+            if (ImGui::Selectable("Glass (1.52)")) refractionRatio = 1.0f / 1.52f;
+            if (ImGui::Selectable("Diamond (2.42)")) refractionRatio = 1.0f / 2.42f;
+            ImGui::EndCombo();
+        }
+        ImGui::SliderFloat("Refraction Ratio", &refractionRatio, 0.5f, 1.0f);
+        ImGui::Unindent();
+    }
+
 }
 
 void ModelLoadingDemo::Cleanup() {

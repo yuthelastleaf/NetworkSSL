@@ -17,6 +17,19 @@ glm::mat4 Camera::GetViewMatrix() const {
     }
 }
 
+glm::mat4 Camera::GetBackViewMatrix() const {
+    if (type == CameraType::ORBIT) {
+        // 轨道相机：镜像位置法
+        glm::vec3 toCamera = position - target;
+        glm::vec3 backPosition = target - toCamera;
+        return glm::lookAt(backPosition, target, up);
+    }
+    else {
+        // 自由相机：反向front向量
+        return glm::lookAt(position, position - front, up);
+    }
+}
+
 glm::mat4 Camera::GetProjectionMatrix(float aspectRatio) const {
     return glm::perspective(glm::radians(fov), aspectRatio, nearPlane, farPlane);
 }

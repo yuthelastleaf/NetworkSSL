@@ -13,6 +13,8 @@
 
 #include "LightColor.h"
 
+#pragma comment(lib, "opengl32.lib")
+
 bool OpenGLApp::Initialize() {
     // GLFW ≥ı ºªØ
     glfwInit();

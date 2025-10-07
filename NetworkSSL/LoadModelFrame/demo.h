@@ -46,6 +46,7 @@ protected:
 
     // 获取常用矩阵
     glm::mat4 GetViewMatrix() const;
+    glm::mat4 GetBackViewMatrix() const;
     glm::mat4 GetProjectionMatrix() const;
 
 private:
@@ -73,10 +74,17 @@ private:
 
     // 帧缓冲相关
     std::shared_ptr<Shader> screenShader;
+    std::shared_ptr<Shader> skyboxShader;
     unsigned int fbo = 0;
+    unsigned int rfbo = 0;
     unsigned int textureColorbuffer = 0;
+    unsigned int rtextureColorbuffer = 0;
     unsigned int rbo;
+    unsigned int rrbo;
     unsigned int quadVAO, quadVBO;
+    unsigned int rquadVAO, rquadVBO;
+    unsigned int skyboxVAO, skyboxVBO;
+    unsigned int sky_texture;
 
     // 控制选项
     bool useFramebuffer = false;     // 是否使用帧缓冲
@@ -86,6 +94,13 @@ private:
     glm::vec3 outline_color = glm::vec3(1.0f, 0.5f, 0.0f);
     float outline_alpha = 0.5f;
     float outline_width = 0.02f;
+
+    bool enableReflection = false;
+    float reflectionStrength = 0.5f;
+
+    // 新增
+    bool enableRefraction = false;
+    float refractionRatio = 1.0f / 1.52f;  // 默认玻璃折射率
 
 public:
     void Initialize() override;
@@ -99,9 +114,10 @@ private:
     void loadModel(const std::string& path);
 
     // 辅助函数
-    void RenderScene();  // 渲染场景（共用）
+    void RenderScene(bool reverse = false);  // 渲染场景（共用）
     void RenderToFramebuffer();  // 渲染到帧缓冲
     void RenderToScreen();  // 渲染到屏幕
+    void RenderSkybox(bool reverse = false);
 };
 
 // Demo管理器

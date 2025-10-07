@@ -19,6 +19,11 @@ glm::mat4 Demo::GetViewMatrix() const {
     return camera->GetViewMatrix();
 }
 
+glm::mat4 Demo::GetBackViewMatrix() const
+{
+    return camera->GetBackViewMatrix();
+}
+
 glm::mat4 Demo::GetProjectionMatrix() const {
     int width, height;
     glfwGetFramebufferSize(glfwGetCurrentContext(), &width, &height);

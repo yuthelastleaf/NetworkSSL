@@ -39,6 +39,7 @@ public:
     Camera(CameraType camType = CameraType::ORBIT);
 
     glm::mat4 GetViewMatrix() const;
+    glm::mat4 GetBackViewMatrix() const;
     glm::mat4 GetProjectionMatrix(float aspectRatio) const;
 
     void ProcessMouseMovement(float deltaX, float deltaY);
